@@ -99,16 +99,31 @@ const createOrResetGame = (gameId, password = "") => {
             db.run('INSERT OR REPLACE INTO games (id, current_turn, password) VALUES (?, ?, ?)', [gameId, 'USSR', password]);
             
             const startingData = [
-                ['USSR', 24, 24],
-                ['Germany', 41, 41],
-                ['UK', 31, 31],
-                ['Japan', 30, 30],
-                ['USA', 42, 42]
+                ['USSR', 24, 24, [
+                    { id: 'f-ussr1', name: 'Russia', capacity: 8, damage: 0 },
+                    { id: 'f-ussr2', name: 'Caucasus', capacity: 4, damage: 0 },
+                    { id: 'f-ussr3', name: 'Karelia S.S.R.', capacity: 2, damage: 0 }
+                ]],
+                ['Germany', 41, 41, [
+                    { id: 'f-ger1', name: 'Germany', capacity: 10, damage: 0 },
+                    { id: 'f-ger2', name: 'Southern Europe', capacity: 6, damage: 0 }
+                ]],
+                ['UK', 31, 31, [
+                    { id: 'f-uk1', name: 'United Kingdom', capacity: 8, damage: 0 },
+                    { id: 'f-uk2', name: 'India', capacity: 3, damage: 0 }
+                ]],
+                ['Japan', 30, 30, [
+                    { id: 'f-jap1', name: 'Japan', capacity: 8, damage: 0 }
+                ]],
+                ['USA', 42, 42, [
+                    { id: 'f-usa1', name: 'Eastern US', capacity: 20, damage: 0 },
+                    { id: 'f-usa2', name: 'Western US', capacity: 10, damage: 0 }
+                ]]
             ];
             
             const stmt = db.prepare('INSERT OR REPLACE INTO nations (game_id, name, income, bank, purchases, player_name, factories) VALUES (?, ?, ?, ?, ?, ?, ?)');
             startingData.forEach(data => {
-                stmt.run([gameId, data[0], data[1], data[2], JSON.stringify({}), '', JSON.stringify([])]);
+                stmt.run([gameId, data[0], data[1], data[2], JSON.stringify({}), '', JSON.stringify(data[3] || [])]);
             });
             stmt.finalize();
 
