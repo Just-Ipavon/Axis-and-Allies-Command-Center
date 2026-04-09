@@ -42,6 +42,22 @@ function NationCard({ nation, isEditable }) {
       updateNationBank(nation.name, nation.income, newBank, nation.purchases, nation.player_name, log);
   };
 
+  const handleIncomeManualChange = (e) => {
+      if (!isEditable) return;
+      let val = e.target.value;
+      if (val === '') val = 0;
+      else val = parseInt(val) || 0;
+      updateNationBank(nation.name, val, nation.bank, nation.purchases, nation.player_name);
+  };
+
+  const handleBankManualChange = (e) => {
+      if (!isEditable) return;
+      let val = e.target.value;
+      if (val === '') val = 0;
+      else val = parseInt(val) || 0;
+      updateNationBank(nation.name, nation.income, val, nation.purchases, nation.player_name);
+  };
+
   const handlePurchase = (unit, dQty) => {
       if (!isEditable) return;
       const currentPurchases = nation.purchases || {};
@@ -99,7 +115,16 @@ function NationCard({ nation, isEditable }) {
         </div>
         <div className="text-right">
           <div className="text-sm uppercase opacity-80">Bank (IPC)</div>
-          <div className="text-3xl font-display">{nation.bank}</div>
+          {isEditable ? (
+             <input 
+                 type="number" 
+                 className="text-3xl font-display w-24 bg-transparent outline-none text-right border-b border-dashed border-current focus:bg-black/10" 
+                 value={nation.bank} 
+                 onChange={handleBankManualChange} 
+             />
+          ) : (
+             <div className="text-3xl font-display">{nation.bank}</div>
+          )}
         </div>
       </div>
 
@@ -107,7 +132,16 @@ function NationCard({ nation, isEditable }) {
       <div className="flex bg-black/20 p-2 justify-between items-center">
          <div>
             <div className="text-xs uppercase opacity-80">Income</div>
-            <div className="text-xl font-bold">{nation.income}</div>
+            {isEditable ? (
+               <input 
+                   type="number" 
+                   className="text-xl font-bold w-16 bg-transparent outline-none border-b border-dashed border-current focus:bg-black/10" 
+                   value={nation.income} 
+                   onChange={handleIncomeManualChange} 
+               />
+            ) : (
+               <div className="text-xl font-bold">{nation.income}</div>
+            )}
          </div>
          {isEditable && (
              <div className="flex gap-2">
@@ -125,7 +159,9 @@ function NationCard({ nation, isEditable }) {
                  const qty = (nation.purchases && nation.purchases[unit]) || 0;
                  return (
                      <div key={unit} className="flex justify-between items-center bg-black/10 py-1.5 px-2">
-                         <div className="pr-1" title={`${unit} (${UNIT_COSTS[unit]})`}>{unit}</div>
+                         <div className="pr-1">
+                             {unit} <span className="opacity-60 text-xs">({UNIT_COSTS[unit]})</span>
+                         </div>
                          {isEditable ? (
                          <div className="flex items-center gap-1">
                             <span className="opacity-70 text-xs w-2 text-right">{qty || ''}</span>
