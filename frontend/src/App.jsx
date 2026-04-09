@@ -25,6 +25,7 @@ const UNIT_COSTS = {
   'Carrier': 14,
   'Battleship': 20,
   'Industrial Complex': 15,
+  'Repair Factory': 1,
 };
 
 function MiniNationCard({ nation }) {
