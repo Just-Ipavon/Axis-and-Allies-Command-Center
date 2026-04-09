@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
-import { Shield, Clock, Plus, Minus, RotateCcw, LogOut, Trash2, Lock } from 'lucide-react';
+import { Shield, Clock, Plus, Minus, RotateCcw, LogOut, Trash2, Lock, Swords } from 'lucide-react';
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
+
+const TURN_ORDER = ['USSR', 'Germany', 'UK', 'Japan', 'USA'];
 
 // Unit costs standard for 1942 2nd Edition
 const UNIT_COSTS = {
@@ -25,8 +27,31 @@ const UNIT_COSTS = {
   'Industrial Complex': 15,
 };
 
+function MiniNationCard({ nation }) {
+  const colorClasses = {
+      'USSR': 'bg-faction-ussr text-white border-vintage-text',
+      'Germany': 'bg-faction-germany text-white border-vintage-text',
+      'UK': 'bg-faction-uk text-black border-vintage-text',
+      'Japan': 'bg-faction-japan text-white border-vintage-text',
+      'USA': 'bg-faction-usa text-white border-vintage-text',
+  }[nation.name] || 'bg-vintage-paper';
+
+  return (
+    <div className={cn("p-2 border-2 shadow-[2px_2px_0_0_rgba(43,42,38,1)] flex justify-between items-center w-full", colorClasses)}>
+        <div className="font-bold text-lg tracking-wider">{nation.name}</div>
+        <div className="flex gap-6 text-sm uppercase opacity-90">
+            <div className="text-right whitespace-nowrap"><span className="opacity-70 text-xs block -mb-1">Income</span><span className="font-bold">{nation.income}</span></div>
+            <div className="text-right whitespace-nowrap"><span className="opacity-70 text-xs block -mb-1">Bank</span><span className="font-bold text-lg font-display">{nation.bank}</span></div>
+        </div>
+    </div>
+  )
+}
+
 function NationCard({ nation, isEditable }) {
-  const { updateNationBank } = useGameStore();
+  const { updateNationBank, conquerTerritory, advanceTurn } = useGameStore();
+  const [battleMode, setBattleMode] = useState(false);
+  const [battleVictim, setBattleVictim] = useState('');
+  const [battleValue, setBattleValue] = useState(1);
 
   const handleIncomeChange = (amount) => {
     if (!isEditable) return;
@@ -75,12 +100,19 @@ function NationCard({ nation, isEditable }) {
       updateNationBank(nation.name, nation.income, newBank, newPurchases, nation.player_name);
   };
 
+  const handleConquer = () => {
+      if (!battleVictim) return alert("Select a target nation");
+      conquerTerritory(nation.name, battleVictim, battleValue);
+      setBattleMode(false);
+  };
+
   const collectIncome = () => {
       if (!isEditable) return;
       const log = `${nation.name} collects income (${nation.income} IPC).`;
       
       // Also clear purchases for the new turn
       updateNationBank(nation.name, nation.income, nation.bank + nation.income, {}, nation.player_name, log);
+      advanceTurn();
   };
 
   const handlePlayerNameChange = (e) => {
@@ -130,7 +162,7 @@ function NationCard({ nation, isEditable }) {
 
       {/* Income Tracker */}
       <div className="flex bg-black/20 p-2 justify-between items-center">
-         <div>
+         <div className="relative">
             <div className="text-xs uppercase opacity-80">Income</div>
             {isEditable ? (
                <input 
@@ -142,12 +174,27 @@ function NationCard({ nation, isEditable }) {
             ) : (
                <div className="text-xl font-bold">{nation.income}</div>
             )}
+
+            {isEditable && battleMode && (
+               <div className="absolute top-12 left-0 text-sm bg-[#5c5647] text-[#f4ecd8] border-2 border-current shadow-xl p-3 z-50 w-64">
+                   <div className="font-bold mb-1 uppercase text-xs opacity-80">Conquered Value (IPC)</div>
+                   <input type="number" value={battleValue} onChange={e=>setBattleValue(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none" min={1} />
+                   <div className="font-bold mt-3 mb-1 uppercase text-xs opacity-80">From Nation</div>
+                   <select value={battleVictim} onChange={e=>setBattleVictim(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none cursor-pointer">
+                      <option value="">-- Select Enemy --</option>
+                      {TURN_ORDER.filter(n => n !== nation.name).map(n => <option key={n} value={n}>{n}</option>)}
+                   </select>
+                   <div className="flex gap-2 mt-4">
+                       <button onClick={handleConquer} className="flex-1 bg-green-700 text-white shadow-sm border border-black font-bold py-2 uppercase hover:bg-green-600 active:scale-95">Confirm</button>
+                       <button onClick={()=>setBattleMode(false)} className="flex-1 bg-red-900 border text-white shadow-sm border-black font-bold py-2 uppercase hover:bg-red-800 active:scale-95">Cancel</button>
+                   </div>
+               </div>
+            )}
          </div>
          {isEditable && (
-             <div className="flex gap-2">
-                 <button onClick={() => handleIncomeChange(-1)} className="bg-black/30 p-1 hover:bg-black/50 active:scale-95"><Minus size={16} /></button>
-                 <button onClick={() => handleIncomeChange(1)} className="bg-white/30 text-black p-1 hover:bg-white/50 active:scale-95"><Plus size={16} /></button>
-             </div>
+             <button onClick={() => setBattleMode(!battleMode)} className={cn("flex items-center gap-1 font-bold px-3 py-1.5 uppercase shadow-sm border border-current text-xs shadow-black active:scale-95 transition-all text-black", battleMode ? "bg-amber-400" : "bg-white/60 hover:bg-white/80")}>
+                 <Swords size={14} /> Battle Report
+             </button>
          )}
       </div>
 
@@ -312,7 +359,7 @@ function LobbyScreen() {
 }
 
 function App() {
-  const { gameId, setGameId, initSocket, gameData, nations, logs, role, setRole, connected, resetGame } = useGameStore();
+  const { gameId, setGameId, initSocket, gameData, nations, logs, role, setRole, connected, resetGame, currentTurn } = useGameStore();
 
   useEffect(() => {
     initSocket();
@@ -342,6 +389,20 @@ function App() {
              <span>•</span>
              <button onClick={() => setGameId(null)} className="flex items-center gap-1 underline hover:text-red-800"><LogOut size={14} /> Leave Room</button>
            </div>
+
+           {/* TURN ORDER HEADER */}
+           <div className="mt-4 flex flex-wrap gap-2 items-center">
+               <span className="text-xs font-bold uppercase opacity-60 mr-2 border-b border-current">Sequence / Turn:</span>
+               {TURN_ORDER.map(t => (
+                   <div key={t} className={cn("px-3 py-1 font-bold border-2 transition-all duration-300", 
+                        currentTurn === t 
+                        ? "bg-amber-400 text-black border-black shadow-[4px_4px_0_0_rgba(0,0,0,1)] scale-105 z-10" 
+                        : "opacity-60 bg-black/10 border-current"
+                   )}>
+                       {t}
+                   </div>
+               ))}
+           </div>
         </div>
         
         {/* Role Selector */}
@@ -362,11 +423,35 @@ function App() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         
         {/* NATIONS GRID */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-           {nations.map(nation => {
-              const isEditable = role === 'banker' || role === nation.name;
-              return <NationCard key={nation.name} nation={nation} isEditable={isEditable} />
-           })}
+        <div className="lg:col-span-3 flex flex-col gap-6">
+           {/* If Banker: Show Grid of All Full Cards */}
+           {role === 'banker' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 items-start">
+                 {nations.map(nation => <NationCard key={nation.name} nation={nation} isEditable={true} />)}
+              </div>
+           )}
+
+           {/* If Single Player: Show Top Full Card + Minimap of Others */}
+           {role !== 'banker' && (
+              <>
+                  <div>
+                      {nations.filter(n => n.name === role).map(nation => (
+                          <NationCard key={nation.name} nation={nation} isEditable={true} />
+                      ))}
+                  </div>
+
+                  {nations.filter(n => n.name !== role).length > 0 && (
+                      <div className="pt-4 border-t-2 border-vintage-text/20">
+                          <h3 className="text-xs font-bold mb-3 uppercase tracking-widest opacity-60">Global Overview</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {nations.filter(n => n.name !== role).map(nation => (
+                                  <MiniNationCard key={nation.name} nation={nation} />
+                              ))}
+                          </div>
+                      </div>
+                  )}
+              </>
+           )}
         </div>
 
         {/* SIDEBAR: LOGS & CONTROLS */}

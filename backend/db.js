@@ -130,6 +130,48 @@ const updateNationStatus = (gameId, name, income, bank, purchases, playerName) =
     });
 };
 
+const TURN_ORDER = ['USSR', 'Germany', 'UK', 'Japan', 'USA'];
+
+const advanceTurn = (gameId) => {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT current_turn FROM games WHERE id = ?', [gameId], (err, game) => {
+            if (err) return reject(err);
+            if (!game) return reject(new Error('Game not found'));
+            
+            const currIdx = TURN_ORDER.indexOf(game.current_turn) || 0;
+            const nextTurn = TURN_ORDER[(currIdx + 1) % TURN_ORDER.length];
+            
+            db.run('UPDATE games SET current_turn = ? WHERE id = ?', [nextTurn, gameId], (err) => {
+                if (err) return reject(err);
+                resolve(nextTurn);
+            });
+        });
+    });
+};
+
+const conquerTerritory = (gameId, conqueror, victim, value) => {
+    return new Promise((resolve, reject) => {
+        const val = parseInt(value) || 0;
+        if (val <= 0) return reject(new Error("Invalid value"));
+        
+        db.serialize(() => {
+            db.run('UPDATE nations SET income = Math.max(0, income - ?) WHERE game_id = ? AND name = ?', [val, gameId, victim], (err) => {
+               if(err && err.message.includes("no such function: Math.max")) {
+                   // SQLite fallback for MAX
+                   db.run('UPDATE nations SET income = CASE WHEN income - ? < 0 THEN 0 ELSE income - ? END WHERE game_id = ? AND name = ?', [val, val, gameId, victim]);
+               }
+            });
+            db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror]);
+            db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                [gameId, `${conqueror} conquered territory from ${victim} worth ${val} IPC.`], 
+                (err) => {
+                    if (err) reject(err);
+                    resolve(true);
+                });
+        });
+    });
+};
+
 const addLog = (gameId, message) => {
     return new Promise((resolve, reject) => {
         db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, message], (err) => {
@@ -160,6 +202,8 @@ module.exports = {
     getLogs,
     createOrResetGame,
     updateNationStatus,
+    advanceTurn,
+    conquerTerritory,
     addLog,
     deleteGame
 };

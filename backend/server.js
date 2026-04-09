@@ -53,6 +53,7 @@ async function broadcastGameState(gameId) {
 
         io.to(gameId).emit('gameState', {
             game,
+            currentTurn: game.current_turn,
             nations: nations.map(n => ({ ...n, purchases: JSON.parse(n.purchases || '{}') })),
             logs: logs.reverse()
         });
@@ -108,10 +109,27 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Reset game
+    // Resets a game
     socket.on('resetGame', async (gameId) => {
-        await db.createOrResetGame(gameId);
+        await db.createOrResetGame(gameId, ""); // Wipe out, keep no password here or we need password? Just reset state
         await broadcastGameState(gameId);
+    });
+
+    // Advance turn
+    socket.on('advanceTurn', async (gameId) => {
+        try {
+            await db.advanceTurn(gameId);
+            await broadcastGameState(gameId);
+        } catch(e) { console.error(e) }
+    });
+
+    // Conquer Territory
+    socket.on('conquerTerritory', async (data) => {
+        try {
+            const { gameId, conqueror, victim, value } = data;
+            await db.conquerTerritory(gameId, conqueror, victim, value);
+            await broadcastGameState(gameId);
+        } catch(e) { console.error(e) }
     });
 
     socket.on('disconnect', () => {

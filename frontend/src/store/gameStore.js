@@ -45,20 +45,18 @@ export const useGameStore = create((set, get) => ({
     initSocket: () => {
         socket.on('connect', () => {
             set({ connected: true });
-            if (get().gameId) {
-                socket.emit('joinGame', get().gameId);
-            }
         });
-
+        
         socket.on('disconnect', () => {
             set({ connected: false });
         });
 
         socket.on('gameState', (data) => {
-            set({
-                gameData: data.game,
-                nations: data.nations,
-                logs: data.logs
+            set({ 
+                gameData: data.game, 
+                nations: data.nations, 
+                logs: data.logs,
+                currentTurn: data.currentTurn
             });
         });
     },
@@ -82,15 +80,21 @@ export const useGameStore = create((set, get) => ({
     },
 
     updateNationBank: (name, income, bank, purchases, playerName, logMessage = null) => {
-        socket.emit('updateNation', {
-            gameId: get().gameId,
-            name,
-            income,
-            bank,
-            purchases,
-            playerName,
-            logMessage
-        });
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('updateNation', { gameId, name, income, bank, purchases, playerName, logMessage });
+    },
+
+    conquerTerritory: (conqueror, victim, value) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('conquerTerritory', { gameId, conqueror, victim, value });
+    },
+
+    advanceTurn: () => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('advanceTurn', gameId);
     },
 
     resetGame: () => {
