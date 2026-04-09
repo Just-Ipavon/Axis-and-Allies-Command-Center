@@ -14,8 +14,8 @@ const TURN_ORDER = ['USSR', 'Germany', 'UK', 'Japan', 'USA'];
 const UNIT_COSTS = {
   'Infantry': 3,
   'Artillery': 4,
-  'Tank': 5,
-  'AA Gun': 6,
+  'Tank': 6,
+  'AA Gun': 5,
   'Fighter': 10,
   'Bomber': 12,
   'Submarine': 6,
