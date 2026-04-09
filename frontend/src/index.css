@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-vintage-bg text-vintage-text font-typewriter;
+    /* Optional: subtle noise or paper texture */
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-bold font-display uppercase tracking-wider;
+  }
+}
+
+/* Custom Scrollbar for vintage look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-vintage-bg border-l border-vintage-border;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-vintage-border;
+}
+
+/* Button hover offsets for a mechanical/typewriter feel */
+.vintage-btn {
+  @apply border-2 border-vintage-text bg-vintage-paper px-4 py-2 font-bold inset-0 shadow-[4px_4px_0_0_rgba(43,42,38,1)] active:shadow-[1px_1px_0_0_rgba(43,42,38,1)] active:translate-y-[3px] active:translate-x-[3px] transition-all;
+}
+
+.card-vintage {
+  @apply border-2 border-vintage-border bg-vintage-paper shadow-[2px_2px_0_0_rgba(189,166,130,1)];
+}
