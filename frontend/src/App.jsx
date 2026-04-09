@@ -11,20 +11,20 @@ function cn(...inputs) {
 const TURN_ORDER = ['USSR', 'Germany', 'UK', 'Japan', 'USA'];
 
 // Unit costs standard for 1942 2nd Edition
-const UNIT_COSTS = {
-  'Infantry': 3,
-  'Artillery': 4,
-  'Tank': 6,
-  'AA Gun': 5,
-  'Fighter': 10,
-  'Bomber': 12,
-  'Submarine': 6,
-  'Transport': 7,
-  'Destroyer': 8,
-  'Cruiser': 12,
-  'Carrier': 14,
-  'Battleship': 20,
-  'Industrial Complex': 15,
+const UNITS = {
+  'Infantry': { cost: 3, a: 1, d: 2 },
+  'Artillery': { cost: 4, a: 2, d: 2 },
+  'Tank': { cost: 6, a: 3, d: 3 },
+  'AA Gun': { cost: 5, a: '-', d: '-' },
+  'Fighter': { cost: 10, a: 3, d: 4 },
+  'Bomber': { cost: 12, a: 4, d: 1 },
+  'Submarine': { cost: 6, a: 2, d: 1 },
+  'Transport': { cost: 7, a: 0, d: 0 },
+  'Destroyer': { cost: 8, a: 2, d: 2 },
+  'Cruiser': { cost: 12, a: 3, d: 3 },
+  'Carrier': { cost: 14, a: 1, d: 2 },
+  'Battleship': { cost: 20, a: 4, d: 4 },
+  'Industrial Complex': { cost: 15, a: '-', d: '-' },
 };
 
 function MiniNationCard({ nation }) {
@@ -113,7 +113,7 @@ function NationCard({ nation, isEditable }) {
           }
       }
 
-      const costDiff = UNIT_COSTS[unit] * dQty;
+      const costDiff = UNITS[unit].cost * dQty;
       if (nation.bank - costDiff < 0) return alert("Not enough IPCs in Bank!"); 
 
       if (unit === 'Industrial Complex' && dQty > 0) {
@@ -241,12 +241,14 @@ function NationCard({ nation, isEditable }) {
              <span className="text-xs bg-white/20 px-2 py-0.5 font-bold shadow-sm border border-current">Capacity limit: {totalPurchased}/{totalCapacity}</span>
           </div>
           <div className="flex flex-col gap-1 text-sm overflow-y-auto max-h-[170px] pr-1">
-             {Object.keys(UNIT_COSTS).map(unit => {
+             {Object.keys(UNITS).map(unit => {
                  const qty = (nation.purchases && nation.purchases[unit]) || 0;
                  return (
                      <div key={unit} className="flex justify-between items-center bg-black/10 py-1.5 px-2">
-                         <div className="pr-1">
-                             {unit} <span className="opacity-60 text-xs">({UNIT_COSTS[unit]})</span>
+                         <div className="pr-1 flex items-baseline gap-2">
+                             <span>{unit}</span>
+                             <span className="opacity-50 text-[10px] font-bold">A{UNITS[unit].a} D{UNITS[unit].d}</span>
+                             <span className="opacity-80 text-xs font-bold text-amber-500/80">IPC {UNITS[unit].cost}</span>
                          </div>
                          {isEditable ? (
                          <div className="flex items-center gap-1">
