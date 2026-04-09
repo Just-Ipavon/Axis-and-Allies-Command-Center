@@ -51,7 +51,7 @@ function NationCard({ nation, isEditable }) {
   const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
-  const canCollect = isEditable && (isMyTurn || role === 'banker');
+  const canCollect = isEditable && isMyTurn;
   const [battleMode, setBattleMode] = useState(false);
   const [battleVictim, setBattleVictim] = useState('');
   const [battleValue, setBattleValue] = useState(1);
