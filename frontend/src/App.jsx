@@ -59,7 +59,7 @@ function NationCard({ nation, isEditable }) {
   const [adminEditMode, setAdminEditMode] = useState(false);
 
   const requestAdminMode = () => {
-      const pwd = prompt("Enter Master Admin Code (562656) to manually override IPC values:");
+      const pwd = prompt("Enter Master Admin Code to manually override IPC values:");
       if (pwd === "562656") setAdminEditMode(true);
       else alert("Access Denied");
   };
@@ -455,7 +455,7 @@ function App() {
            {/* If Banker: Show Grid of All Full Cards */}
            {role === 'banker' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 items-start">
-                 {nations.map(nation => <NationCard key={nation.name} nation={nation} isEditable={true} />)}
+                 {nations.sort((a,b) => TURN_ORDER.indexOf(a.name) - TURN_ORDER.indexOf(b.name)).map(nation => <NationCard key={nation.name} nation={nation} isEditable={true} />)}
               </div>
            )}
 
@@ -472,7 +472,9 @@ function App() {
                       <div className="pt-4 border-t-2 border-vintage-text/20">
                           <h3 className="text-xs font-bold mb-3 uppercase tracking-widest opacity-60">Global Overview</h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {nations.filter(n => n.name !== role).map(nation => (
+                              {nations.filter(n => n.name !== role)
+                                .sort((a,b) => TURN_ORDER.indexOf(a.name) - TURN_ORDER.indexOf(b.name))
+                                .map(nation => (
                                   <MiniNationCard key={nation.name} nation={nation} />
                               ))}
                           </div>
