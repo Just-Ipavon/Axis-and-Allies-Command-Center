@@ -56,6 +56,13 @@ function NationCard({ nation, isEditable }) {
   const [battleVictim, setBattleVictim] = useState('');
   const [battleValue, setBattleValue] = useState(1);
   const [battleTargetType, setBattleTargetType] = useState('bank'); // Default to Bank as requested
+  const [adminEditMode, setAdminEditMode] = useState(false);
+
+  const requestAdminMode = () => {
+      const pwd = prompt("Enter Master Admin Code (562656) to manually override IPC values:");
+      if (pwd === "562656") setAdminEditMode(true);
+      else alert("Access Denied");
+  };
 
   const AXIS = ['Germany', 'Japan'];
   const ALLIES = ['USSR', 'UK', 'USA'];
@@ -155,11 +162,15 @@ function NationCard({ nation, isEditable }) {
            )}
         </div>
         <div className="text-right">
-          <div className="text-sm uppercase opacity-80">Bank (IPC)</div>
-          {isEditable ? (
+          <div className="text-sm uppercase opacity-80 flex justify-end items-center gap-1">
+             Bank (IPC)
+             {isEditable && !adminEditMode && <button onClick={requestAdminMode} title="Unlock manual editing" className="opacity-50 hover:opacity-100 hover:text-amber-400"><Lock size={10} /></button>}
+             {adminEditMode && <Lock size={10} className="text-red-500" title="Editing Unlocked" />}
+          </div>
+          {adminEditMode ? (
              <input 
                  type="number" 
-                 className="text-3xl font-display w-24 bg-transparent outline-none text-right border-b border-dashed border-current focus:bg-black/10" 
+                 className="text-3xl font-display w-24 bg-transparent outline-none text-right border-b border-dashed border-red-500 focus:bg-black/10" 
                  value={nation.bank} 
                  onChange={handleBankManualChange} 
              />
@@ -173,10 +184,10 @@ function NationCard({ nation, isEditable }) {
       <div className="flex bg-black/20 p-2 justify-between items-center">
          <div className="relative">
             <div className="text-xs uppercase opacity-80">Income</div>
-            {isEditable ? (
+            {adminEditMode ? (
                <input 
                    type="number" 
-                   className="text-xl font-bold w-16 bg-transparent outline-none border-b border-dashed border-current focus:bg-black/10" 
+                   className="text-xl font-bold w-16 bg-transparent outline-none border-b border-dashed border-red-500 focus:bg-black/10" 
                    value={nation.income} 
                    onChange={handleIncomeManualChange} 
                />

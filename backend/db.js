@@ -154,27 +154,35 @@ const conquerTerritory = (gameId, conqueror, victim, value, targetType = 'income
         const val = parseInt(value) || 0;
         if (val <= 0) return reject(new Error("Invalid value"));
         
-        db.serialize(() => {
-            if (targetType === 'bank') {
-                db.run('UPDATE nations SET bank = MAX(0, bank - ?) WHERE game_id = ? AND name = ?', [val, gameId, victim]);
-                db.run('UPDATE nations SET bank = bank + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror]);
-                db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                    [gameId, `${conqueror} plundered ${val} IPCs from the bank of ${victim}.`], 
-                    (err) => {
-                        if (err) reject(err);
-                        resolve(true);
-                    });
-            } else {
-                db.run('UPDATE nations SET income = MAX(0, income - ?) WHERE game_id = ? AND name = ?', [val, gameId, victim]);
-                db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror]);
-                db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                    [gameId, `${conqueror} conquered territory from ${victim} worth ${val} Income.`], 
-                    (err) => {
-                        if (err) reject(err);
-                        resolve(true);
-                    });
-            }
-        });
+        if (targetType === 'bank') {
+            db.run('UPDATE nations SET bank = CASE WHEN bank - ? < 0 THEN 0 ELSE bank - ? END WHERE game_id = ? AND name = ?', [val, val, gameId, victim], (err) => {
+                if(err) return reject(err);
+                db.run('UPDATE nations SET bank = bank + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror], (err) => {
+                    if(err) return reject(err);
+                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                        [gameId, `${conqueror} plundered ${val} IPCs from the bank of ${victim}.`], 
+                        (err) => {
+                            if (err) reject(err);
+                            else resolve(true);
+                        }
+                    );
+                });
+            });
+        } else {
+            db.run('UPDATE nations SET income = CASE WHEN income - ? < 0 THEN 0 ELSE income - ? END WHERE game_id = ? AND name = ?', [val, val, gameId, victim], (err) => {
+                if(err) return reject(err);
+                db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror], (err) => {
+                    if(err) return reject(err);
+                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                        [gameId, `${conqueror} conquered territory from ${victim} worth ${val} Income.`], 
+                        (err) => {
+                            if (err) reject(err);
+                            else resolve(true);
+                        }
+                    );
+                });
+            });
+        }
     });
 };
 
