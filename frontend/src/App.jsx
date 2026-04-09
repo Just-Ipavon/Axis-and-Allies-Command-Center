@@ -55,7 +55,7 @@ function NationCard({ nation, isEditable }) {
   const [battleMode, setBattleMode] = useState(false);
   const [battleVictim, setBattleVictim] = useState('');
   const [battleValue, setBattleValue] = useState(1);
-  const [battleTargetType, setBattleTargetType] = useState('bank'); // Default to Bank as requested
+  const [battleTargetType, setBattleTargetType] = useState('income');
   const [adminEditMode, setAdminEditMode] = useState(false);
 
   const requestAdminMode = () => {
@@ -502,7 +502,14 @@ function App() {
             {role === 'banker' && (
                 <button 
                   onClick={() => {
-                      if(window.confirm("RESET GAME? This will wipe all data.")) resetGame();
+                      const pwd = prompt("Enter Master Admin Code to authorize complete Server Data Wipe:");
+                      if (pwd === "562656") {
+                          if (window.confirm("CRITICAL WARNING: This will permanently erase this operation's database. Proceed?")) {
+                              resetGame();
+                          }
+                      } else if (pwd !== null) {
+                          alert("AUTHORIZATION DENIED.");
+                      }
                   }}
                   className="vintage-btn text-red-800 bg-red-100 flex justify-center items-center gap-2 mt-4"
                 >
