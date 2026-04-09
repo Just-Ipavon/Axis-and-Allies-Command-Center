@@ -146,7 +146,14 @@ function NationCard({ nation, isEditable }) {
 
   const collectIncome = () => {
       if (!isEditable) return;
-      const log = `${nation.name} collects income (${nation.income} IPC).`;
+      
+      const items = Object.entries(nation.purchases || {})
+          .filter(([_, qty]) => qty > 0)
+          .map(([unit, qty]) => `${qty}x ${unit}`)
+          .join(', ');
+          
+      const purchaseStr = items ? ` (Mobilized: ${items})` : '';
+      const log = `${nation.name} collects income (${nation.income} IPC).${purchaseStr}`;
       
       // Also clear purchases for the new turn
       updateNationBank(nation.name, nation.income, nation.bank + nation.income, {}, nation.player_name, log);
