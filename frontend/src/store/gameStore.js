@@ -97,6 +97,24 @@ export const useGameStore = create((set, get) => ({
         socket.emit('advanceTurn', gameId);
     },
 
+    addFactory: (name, territoryName, capacity) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('addFactory', { gameId, name, territoryName, capacity });
+    },
+    
+    removeFactory: (name, factoryId) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('removeFactory', { gameId, name, factoryId });
+    },
+    
+    updateFactoryDamage: (name, factoryId, damageDelta) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('updateFactoryDamage', { gameId, name, factoryId, damageDelta });
+    },
+
     resetGame: () => {
         socket.emit('resetGame', get().gameId);
     }

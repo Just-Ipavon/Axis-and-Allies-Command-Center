@@ -27,6 +27,7 @@ function initDb() {
             bank INTEGER,
             purchases TEXT,
             player_name TEXT,
+            factories TEXT,
             PRIMARY KEY (game_id, name)
         )`);
 
@@ -37,8 +38,9 @@ function initDb() {
             message TEXT
         )`);
         
-        // Ensure player_name and password exist (if upgrading an existing DB)
+        // Ensure player_name, password and factories exist (if upgrading an existing DB)
         db.run("ALTER TABLE nations ADD COLUMN player_name TEXT", (err) => {});
+        db.run("ALTER TABLE nations ADD COLUMN factories TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN password TEXT", (err) => {});
 
         // Cleanup ghost sessions
@@ -104,9 +106,9 @@ const createOrResetGame = (gameId, password = "") => {
                 ['USA', 42, 42]
             ];
             
-            const stmt = db.prepare('INSERT OR REPLACE INTO nations (game_id, name, income, bank, purchases, player_name) VALUES (?, ?, ?, ?, ?, ?)');
+            const stmt = db.prepare('INSERT OR REPLACE INTO nations (game_id, name, income, bank, purchases, player_name, factories) VALUES (?, ?, ?, ?, ?, ?, ?)');
             startingData.forEach(data => {
-                stmt.run([gameId, data[0], data[1], data[2], JSON.stringify({}), '']);
+                stmt.run([gameId, data[0], data[1], data[2], JSON.stringify({}), '', JSON.stringify([])]);
             });
             stmt.finalize();
 
@@ -195,6 +197,65 @@ const addLog = (gameId, message) => {
     });
 };
 
+const addFactory = (gameId, name, territoryName, capacity) => {
+    return new Promise((resolve, reject) => {
+        const id = Math.random().toString(36).substr(2, 9);
+        db.get('SELECT factories FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
+            if(err) return reject(err);
+            let f = [];
+            try { f = JSON.parse(row.factories || '[]'); } catch(e){}
+            f.push({ id, name: territoryName, capacity: parseInt(capacity), damage: 0 });
+            db.run('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?', [JSON.stringify(f), gameId, name], (e) => {
+                if(e) reject(e); else resolve(true);
+            });
+        });
+    });
+};
+
+const removeFactory = (gameId, name, factoryId) => {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT factories FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
+            if(err) return reject(err);
+            let f = [];
+            try { f = JSON.parse(row.factories || '[]'); } catch(e){}
+            f = f.filter(x => x.id !== factoryId);
+            db.run('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?', [JSON.stringify(f), gameId, name], (e) => {
+                if(e) reject(e); else resolve(true);
+            });
+        });
+    });
+};
+
+const updateFactoryDamage = (gameId, name, factoryId, damageDelta) => {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT factories, bank FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
+            if(err) return reject(err);
+            let f = [];
+            let bank = row.bank;
+            try { f = JSON.parse(row.factories || '[]'); } catch(e){}
+            
+            const factory = f.find(x => x.id === factoryId);
+            if(!factory) return reject(new Error('Factory not found'));
+            
+            const cap = factory.capacity;
+            const newDamage = Math.max(0, Math.min(factory.damage + damageDelta, cap * 2));
+            
+            // If repairing (damageDelta < 0), it costs IPC: 1 damage = 1 IPC
+            if (damageDelta < 0) {
+                const cost = factory.damage - newDamage;
+                if (bank < cost) return reject(new Error('Not enough Bank IPC to repair'));
+                bank -= cost;
+            }
+            
+            factory.damage = newDamage;
+            
+            db.run('UPDATE nations SET factories = ?, bank = ? WHERE game_id = ? AND name = ?', [JSON.stringify(f), bank, gameId, name], (e) => {
+                if(e) reject(e); else resolve(true);
+            });
+        });
+    });
+};
+
 const deleteGame = (gameId) => {
     return new Promise((resolve, reject) => {
         db.serialize(() => {
@@ -219,5 +280,8 @@ module.exports = {
     advanceTurn,
     conquerTerritory,
     addLog,
-    deleteGame
+    deleteGame,
+    addFactory,
+    removeFactory,
+    updateFactoryDamage
 };

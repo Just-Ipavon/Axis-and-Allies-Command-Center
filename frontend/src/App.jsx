@@ -25,7 +25,6 @@ const UNIT_COSTS = {
   'Carrier': 14,
   'Battleship': 20,
   'Industrial Complex': 15,
-  'Repair Factory': 1,
 };
 
 function MiniNationCard({ nation }) {
@@ -49,7 +48,7 @@ function MiniNationCard({ nation }) {
 }
 
 function NationCard({ nation, isEditable }) {
-  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role } = useGameStore();
+  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role, addFactory, removeFactory, updateFactoryDamage } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
   const canCollect = isEditable && isMyTurn;
@@ -92,24 +91,38 @@ function NationCard({ nation, isEditable }) {
       updateNationBank(nation.name, val, nation.bank, nation.purchases, nation.player_name);
   };
 
-  const handleBankManualChange = (e) => {
-      if (!isEditable) return;
-      let val = e.target.value;
-      if (val === '') val = 0;
-      else val = parseInt(val) || 0;
-      updateNationBank(nation.name, nation.income, val, nation.purchases, nation.player_name);
-  };
+  const factories = nation.factories || [];
+  const totalCapacity = factories.reduce((sum, f) => sum + Math.max(0, f.capacity - f.damage), 0);
+
+  const currentPurchases = nation.purchases || {};
+  let totalPurchased = 0;
+  Object.entries(currentPurchases).forEach(([unit, qty]) => {
+      if (unit !== 'Industrial Complex') totalPurchased += qty;
+  });
 
   const handlePurchase = (unit, dQty) => {
       if (!isEditable) return;
-      const currentPurchases = nation.purchases || {};
       const currentQty = currentPurchases[unit] || 0;
       const newQty = currentQty + dQty;
 
       if (newQty < 0) return; // can't buy negative
 
+      if (dQty > 0 && unit !== 'Industrial Complex') {
+          if (totalPurchased >= totalCapacity) {
+              return alert(`Maximum production capacity (${totalCapacity}) reached! You must remove items or build more capacity to purchase more units!`);
+          }
+      }
+
       const costDiff = UNIT_COSTS[unit] * dQty;
-      if (nation.bank - costDiff < 0) return; // Not enough money
+      if (nation.bank - costDiff < 0) return alert("Not enough IPCs in Bank!"); 
+
+      if (unit === 'Industrial Complex' && dQty > 0) {
+          const tName = prompt("Enter the Territory name for this new Industrial Complex:");
+          if (!tName) return; 
+          const cap = prompt(`Enter the base IPC Value of ${tName}:`);
+          if (!cap) return;
+          addFactory(nation.name, tName, parseInt(cap));
+      }
 
       const newBank = nation.bank - costDiff;
       const newPurchases = { ...currentPurchases, [unit]: newQty };
@@ -223,8 +236,11 @@ function NationCard({ nation, isEditable }) {
 
       {/* Purchase Section */}
       <div className="flex-1 mt-2">
-          <h3 className="text-sm font-bold uppercase mb-2">Mobilization</h3>
-          <div className="flex flex-col gap-1 text-sm overflow-y-auto max-h-[300px] pr-1">
+          <div className="flex justify-between items-end mb-1 border-b border-current/20 pb-1">
+             <h3 className="text-sm font-bold uppercase">Mobilization</h3>
+             <span className="text-xs bg-white/20 px-2 py-0.5 font-bold shadow-sm border border-current">Capacity limit: {totalPurchased}/{totalCapacity}</span>
+          </div>
+          <div className="flex flex-col gap-1 text-sm overflow-y-auto max-h-[170px] pr-1">
              {Object.keys(UNIT_COSTS).map(unit => {
                  const qty = (nation.purchases && nation.purchases[unit]) || 0;
                  return (
@@ -234,7 +250,7 @@ function NationCard({ nation, isEditable }) {
                          </div>
                          {isEditable ? (
                          <div className="flex items-center gap-1">
-                            <span className="opacity-70 text-xs w-2 text-right">{qty || ''}</span>
+                            <span className="opacity-70 text-xs w-2 text-right">{qty > 0 ? qty : ''}</span>
                             <button onClick={() => handlePurchase(unit, -1)} className="bg-black/30 h-5 w-5 flex items-center justify-center hover:bg-black/50 active:scale-95">-</button>
                             <button onClick={() => handlePurchase(unit, 1)} className="bg-white/30 text-black h-5 w-5 flex items-center justify-center hover:bg-white/50 active:scale-95">+</button>
                          </div>
@@ -245,6 +261,41 @@ function NationCard({ nation, isEditable }) {
                  )
              })}
           </div>
+      </div>
+
+      {/* Factories Management */}
+      <div className="mt-1">
+           <div className="flex justify-between items-center mb-1">
+               <h3 className="text-xs font-bold uppercase opacity-80">Industrial Complexes</h3>
+               {isEditable && <button onClick={() => {
+                   const tName = prompt("Add Free Setup Factory Location:");
+                   if(!tName) return;
+                   addFactory(nation.name, tName, parseInt(prompt("Territory IPC Value:")||1));
+               }} className="text-[10px] bg-black/30 text-white px-2 py-0.5 hover:bg-black/50 active:scale-95 border border-current">ADD FREE</button>}
+           </div>
+           <div className="flex flex-col gap-1 text-sm max-h-[120px] overflow-y-auto">
+               {factories.map(f => (
+                   <div key={f.id} className="flex justify-between items-center bg-black/20 p-1 px-2 text-xs border border-current shadow-[2px_2px_0_0_rgba(0,0,0,0.5)]">
+                       <div className="flex flex-col">
+                           <span className="font-bold">{f.name} (Cap {f.capacity})</span>
+                           <span className="opacity-60 text-[10px]">Max Dmg: {f.capacity * 2}</span>
+                       </div>
+                       <div className="flex items-center gap-1">
+                           <div className={cn("font-bold px-1.5 border min-w-[36px] text-center", f.damage > 0 ? "bg-red-800 text-white border-red-900" : "bg-black/20 border-current opacity-80")}>
+                               Dmg: {f.damage}
+                           </div>
+                           {isEditable && (
+                               <div className="flex gap-1 ml-1">
+                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, 1)} title="Add 1 Damage (Bombing Raid)" className="w-6 h-5 bg-red-900 text-white flex justify-center items-center font-bold hover:bg-red-700 active:scale-95">+</button>
+                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, -1)} title="Repair 1 Damage (Cost: 1 IPC Bank)" className="w-6 h-5 bg-green-700 text-white flex justify-center items-center font-bold hover:bg-green-600 active:scale-95">-</button>
+                                    <button onClick={() => { if(window.confirm(`Discard ${f.name} factory?`)) removeFactory(nation.name, f.id); }} className="w-6 h-5 bg-black/80 text-white flex justify-center items-center hover:bg-red-800 active:scale-95"><Trash2 size={12} /></button>
+                               </div>
+                           )}
+                       </div>
+                   </div>
+               ))}
+               {factories.length === 0 && <div className="italic opacity-60 text-xs text-center border-t border-b border-dashed border-current py-1 my-1">No production sites.</div>}
+       </div>
       </div>
 
       {isEditable && (

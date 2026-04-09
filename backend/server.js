@@ -54,7 +54,11 @@ async function broadcastGameState(gameId) {
         io.to(gameId).emit('gameState', {
             game,
             currentTurn: game.current_turn,
-            nations: nations.map(n => ({ ...n, purchases: JSON.parse(n.purchases || '{}') })),
+            nations: nations.map(n => ({ 
+                ...n, 
+                purchases: JSON.parse(n.purchases || '{}'),
+                factories: JSON.parse(n.factories || '[]')
+            })),
             logs: logs.reverse()
         });
     } catch (err) {
@@ -128,6 +132,27 @@ io.on('connection', (socket) => {
         try {
             const { gameId, conqueror, victim, value, targetType } = data;
             await db.conquerTerritory(gameId, conqueror, victim, value, targetType);
+            await broadcastGameState(gameId);
+        } catch(e) { console.error(e) }
+    });
+
+    socket.on('addFactory', async ({ gameId, name, territoryName, capacity }) => {
+        try {
+            await db.addFactory(gameId, name, territoryName, capacity);
+            await broadcastGameState(gameId);
+        } catch(e) { console.error(e) }
+    });
+    
+    socket.on('removeFactory', async ({ gameId, name, factoryId }) => {
+        try {
+            await db.removeFactory(gameId, name, factoryId);
+            await broadcastGameState(gameId);
+        } catch(e) { console.error(e) }
+    });
+    
+    socket.on('updateFactoryDamage', async ({ gameId, name, factoryId, damageDelta }) => {
+        try {
+            await db.updateFactoryDamage(gameId, name, factoryId, damageDelta);
             await broadcastGameState(gameId);
         } catch(e) { console.error(e) }
     });
