@@ -48,7 +48,10 @@ function MiniNationCard({ nation }) {
 }
 
 function NationCard({ nation, isEditable }) {
-  const { updateNationBank, conquerTerritory, advanceTurn } = useGameStore();
+  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role } = useGameStore();
+
+  const isMyTurn = currentTurn === nation.name;
+  const canCollect = isEditable && (isMyTurn || role === 'banker');
   const [battleMode, setBattleMode] = useState(false);
   const [battleVictim, setBattleVictim] = useState('');
   const [battleValue, setBattleValue] = useState(1);
@@ -191,11 +194,6 @@ function NationCard({ nation, isEditable }) {
                </div>
             )}
          </div>
-         {isEditable && (
-             <button onClick={() => setBattleMode(!battleMode)} className={cn("flex items-center gap-1 font-bold px-3 py-1.5 uppercase shadow-sm border border-current text-xs shadow-black active:scale-95 transition-all text-black", battleMode ? "bg-amber-400" : "bg-white/60 hover:bg-white/80")}>
-                 <Swords size={14} /> Battle Report
-             </button>
-         )}
       </div>
 
       {/* Purchase Section */}
@@ -225,14 +223,20 @@ function NationCard({ nation, isEditable }) {
       </div>
 
       {isEditable && (
-          <div className="pt-2 border-t-2 border-current/30 mt-auto flex justify-between gap-2">
-              <div className="flex gap-1">
-                 <button onClick={() => handleBankChange(-1)} className="bg-black/30 p-2 hover:bg-black/50">- IPC</button>
-                 <button onClick={() => handleBankChange(1)} className="bg-white/30 text-black p-2 hover:bg-white/50">+ IPC</button>
-              </div>
-              <button onClick={collectIncome} className="bg-green-600/80 text-white font-bold p-2 border border-current shadow-sm hover:bg-green-600 active:scale-95 flex-1 text-center">
-                  Collect Income
+          <div className="pt-2 border-t-2 border-current/30 mt-auto flex justify-between gap-2 items-stretch h-12">
+              <button onClick={() => setBattleMode(!battleMode)} className={cn("flex-1 flex justify-center items-center gap-1 font-bold px-3 shadow transition-all text-black text-[13px]", battleMode ? "bg-amber-400" : "bg-white/80 hover:bg-white")}>
+                  <Swords size={18} /> Battle Report
               </button>
+
+              {canCollect ? (
+                  <button onClick={collectIncome} className="bg-green-600/90 text-white font-bold px-4 border border-current shadow hover:bg-green-600 active:scale-95 flex-1 text-center">
+                      Collect Income
+                  </button>
+              ) : (
+                  <div className="flex-1 border border-current font-bold bg-black/20 text-current flex justify-center items-center text-xs uppercase text-center leading-tight">
+                      Not Your<br/>Turn
+                  </div>
+              )}
           </div>
       )}
     </div>

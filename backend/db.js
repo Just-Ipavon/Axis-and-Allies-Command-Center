@@ -155,12 +155,7 @@ const conquerTerritory = (gameId, conqueror, victim, value) => {
         if (val <= 0) return reject(new Error("Invalid value"));
         
         db.serialize(() => {
-            db.run('UPDATE nations SET income = Math.max(0, income - ?) WHERE game_id = ? AND name = ?', [val, gameId, victim], (err) => {
-               if(err && err.message.includes("no such function: Math.max")) {
-                   // SQLite fallback for MAX
-                   db.run('UPDATE nations SET income = CASE WHEN income - ? < 0 THEN 0 ELSE income - ? END WHERE game_id = ? AND name = ?', [val, val, gameId, victim]);
-               }
-            });
+            db.run('UPDATE nations SET income = MAX(0, income - ?) WHERE game_id = ? AND name = ?', [val, gameId, victim]);
             db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror]);
             db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
                 [gameId, `${conqueror} conquered territory from ${victim} worth ${val} IPC.`], 
