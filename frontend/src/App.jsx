@@ -91,8 +91,16 @@ function NationCard({ nation, isEditable }) {
       updateNationBank(nation.name, val, nation.bank, nation.purchases, nation.player_name);
   };
 
+  const handleBankManualChange = (e) => {
+      if (!isEditable) return;
+      let val = e.target.value;
+      if (val === '') val = 0;
+      else val = parseInt(val) || 0;
+      updateNationBank(nation.name, nation.income, val, nation.purchases, nation.player_name);
+  };
+
   const factories = nation.factories || [];
-  const totalCapacity = factories.reduce((sum, f) => sum + Math.max(0, f.capacity - f.damage), 0);
+  const totalCapacity = factories.reduce((sum, f) => sum + Math.max(0, parseInt(f.capacity || 0) - parseInt(f.damage || 0)), 0);
 
   const currentPurchases = nation.purchases || {};
   let totalPurchased = 0;
