@@ -4,16 +4,22 @@ import { io } from 'socket.io-client';
 const API_BASE = import.meta.env.DEV ? 'http://localhost:1942' : '';
 const socket = io(import.meta.env.DEV ? 'http://localhost:1942' : '/');
 
+const savedGameId = localStorage.getItem('axis_gameId');
+const savedRole = localStorage.getItem('axis_role') || 'banker';
+
 export const useGameStore = create((set, get) => ({
-    gameId: null, // Start with NO default room, force lobby
+    gameId: savedGameId || null, 
     gameData: null,
     nations: [],
     logs: [],
     availableRooms: [],
-    role: 'banker',
+    role: savedRole,
     connected: false,
 
-    setRole: (role) => set({ role }),
+    setRole: (role) => {
+        localStorage.setItem('axis_role', role);
+        set({ role });
+    },
     
     fetchRooms: async () => {
         try {
@@ -45,6 +51,19 @@ export const useGameStore = create((set, get) => ({
     initSocket: () => {
         socket.on('connect', () => {
             set({ connected: true });
+            
+            // Auto-rejoin if session exists (handles F5 reload or Phone Standby wake-up)
+            const { gameId } = get();
+            if (gameId) {
+                const pwd = localStorage.getItem('axis_password') || '';
+                socket.emit('joinGame', { gameId, password: pwd }, (res) => {
+                    if (res && res.error) {
+                        localStorage.removeItem('axis_gameId');
+                        set({ gameId: null });
+                        console.error("Auto-rejoin failed:", res.error);
+                    }
+                });
+            }
         });
         
         socket.on('disconnect', () => {
@@ -64,6 +83,8 @@ export const useGameStore = create((set, get) => ({
     setGameId: (joinData) => {
         return new Promise((resolve, reject) => {
             if (!joinData) {
+                localStorage.removeItem('axis_gameId');
+                localStorage.removeItem('axis_password');
                 set({ gameId: null });
                 return resolve(true);
             }
@@ -72,6 +93,8 @@ export const useGameStore = create((set, get) => ({
                 if (res && res.error) {
                     reject(new Error(res.error));
                 } else {
+                    localStorage.setItem('axis_gameId', payload.gameId);
+                    if (payload.password) localStorage.setItem('axis_password', payload.password);
                     set({ gameId: payload.gameId });
                     resolve(true);
                 }
