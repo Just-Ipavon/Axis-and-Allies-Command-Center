@@ -85,10 +85,10 @@ export const useGameStore = create((set, get) => ({
         socket.emit('updateNation', { gameId, name, income, bank, purchases, playerName, logMessage });
     },
 
-    conquerTerritory: (conqueror, victim, value) => {
+    conquerTerritory: (conqueror, victim, value, targetType) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('conquerTerritory', { gameId, conqueror, victim, value });
+        socket.emit('conquerTerritory', { gameId, conqueror, victim, value, targetType });
     },
 
     advanceTurn: () => {

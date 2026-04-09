@@ -126,8 +126,8 @@ io.on('connection', (socket) => {
     // Conquer Territory
     socket.on('conquerTerritory', async (data) => {
         try {
-            const { gameId, conqueror, victim, value } = data;
-            await db.conquerTerritory(gameId, conqueror, victim, value);
+            const { gameId, conqueror, victim, value, targetType } = data;
+            await db.conquerTerritory(gameId, conqueror, victim, value, targetType);
             await broadcastGameState(gameId);
         } catch(e) { console.error(e) }
     });

@@ -55,6 +55,12 @@ function NationCard({ nation, isEditable }) {
   const [battleMode, setBattleMode] = useState(false);
   const [battleVictim, setBattleVictim] = useState('');
   const [battleValue, setBattleValue] = useState(1);
+  const [battleTargetType, setBattleTargetType] = useState('bank'); // Default to Bank as requested
+
+  const AXIS = ['Germany', 'Japan'];
+  const ALLIES = ['USSR', 'UK', 'USA'];
+  const isAxis = AXIS.includes(nation.name);
+  const enemyAlliance = isAxis ? ALLIES : AXIS;
 
   const handleIncomeChange = (amount) => {
     if (!isEditable) return;
@@ -105,7 +111,7 @@ function NationCard({ nation, isEditable }) {
 
   const handleConquer = () => {
       if (!battleVictim) return alert("Select a target nation");
-      conquerTerritory(nation.name, battleVictim, battleValue);
+      conquerTerritory(nation.name, battleVictim, battleValue, battleTargetType);
       setBattleMode(false);
   };
 
@@ -180,12 +186,19 @@ function NationCard({ nation, isEditable }) {
 
             {isEditable && battleMode && (
                <div className="absolute top-12 left-0 text-sm bg-[#5c5647] text-[#f4ecd8] border-2 border-current shadow-xl p-3 z-50 w-64">
-                   <div className="font-bold mb-1 uppercase text-xs opacity-80">Conquered Value (IPC)</div>
+                   <div className="font-bold mb-1 uppercase text-xs opacity-80">Conquered Value</div>
                    <input type="number" value={battleValue} onChange={e=>setBattleValue(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none" min={1} />
-                   <div className="font-bold mt-3 mb-1 uppercase text-xs opacity-80">From Nation</div>
+                   
+                   <div className="font-bold mt-2 mb-1 uppercase text-xs opacity-80">Target:</div>
+                   <div className="flex gap-4 text-xs font-bold mb-2">
+                        <label className="flex items-center gap-1 cursor-pointer"><input type="radio" checked={battleTargetType==='bank'} onChange={()=>setBattleTargetType('bank')} /> Bank IPC</label>
+                        <label className="flex items-center gap-1 cursor-pointer"><input type="radio" checked={battleTargetType==='income'} onChange={()=>setBattleTargetType('income')} /> Income</label>
+                   </div>
+
+                   <div className="font-bold mt-2 mb-1 uppercase text-xs opacity-80">From Nation</div>
                    <select value={battleVictim} onChange={e=>setBattleVictim(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none cursor-pointer">
                       <option value="">-- Select Enemy --</option>
-                      {TURN_ORDER.filter(n => n !== nation.name).map(n => <option key={n} value={n}>{n}</option>)}
+                      {enemyAlliance.map(n => <option key={n} value={n}>{n}</option>)}
                    </select>
                    <div className="flex gap-2 mt-4">
                        <button onClick={handleConquer} className="flex-1 bg-green-700 text-white shadow-sm border border-black font-bold py-2 uppercase hover:bg-green-600 active:scale-95">Confirm</button>
