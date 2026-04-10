@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'A&A 1942 Companion',
+        name: 'Axis Commander HQ',
         short_name: 'A&A Companion',
         description: 'Axis & Allies 1942 Second Edition Manager',
         theme_color: '#2b2a26',
@@ -16,10 +16,15 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: '/axis.ico',
-            sizes: 'any',
-            type: 'image/x-icon',
+            src: '/favicon.svg',
+            sizes: '192x192 512x512',
+            type: 'image/svg+xml',
             purpose: 'any maskable'
+          },
+          {
+            src: '/axis.ico',
+            sizes: '64x64 32x32 24x24 16x16',
+            type: 'image/x-icon'
           }
         ]
       }

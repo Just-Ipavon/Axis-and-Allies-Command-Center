@@ -48,7 +48,7 @@ function MiniNationCard({ nation }) {
 }
 
 function NationCard({ nation, isEditable }) {
-  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role, addFactory, removeFactory, updateFactoryDamage } = useGameStore();
+  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
   const canCollect = isEditable && isMyTurn;
@@ -57,6 +57,8 @@ function NationCard({ nation, isEditable }) {
   const [battleValue, setBattleValue] = useState(1);
   const [battleTargetType, setBattleTargetType] = useState('income');
   const [adminEditMode, setAdminEditMode] = useState(false);
+  const [transferFactoryData, setTransferFactoryData] = useState(null);
+  const [transferVictim, setTransferVictim] = useState('');
 
   const requestAdminMode = () => {
       const pwd = prompt("Enter Master Admin Code to manually override IPC values:");
@@ -281,7 +283,7 @@ function NationCard({ nation, isEditable }) {
       </div>
 
       {/* Factories Management */}
-      <div className="mt-1">
+      <div className="mt-1 relative">
            <div className="flex justify-between items-center mb-1">
                <h3 className="text-xs font-bold uppercase opacity-80">Industrial Complexes</h3>
                {isEditable && <button onClick={() => {
@@ -290,6 +292,27 @@ function NationCard({ nation, isEditable }) {
                    addFactory(nation.name, tName, parseInt(prompt("Territory IPC Value:")||1));
                }} className="text-[10px] bg-black/30 text-white px-2 py-0.5 hover:bg-black/50 active:scale-95 border border-current">ADD FREE</button>}
            </div>
+
+           {isEditable && transferFactoryData && (
+               <div className="absolute top-8 left-0 text-sm bg-[#5c5647] text-[#f4ecd8] border-2 border-current shadow-xl p-3 z-50 w-[260px]">
+                   <div className="font-bold mb-2 uppercase text-xs">Transfer {transferFactoryData.name} ({transferFactoryData.capacity} IPC)</div>
+                   <div className="font-bold mt-2 mb-1 uppercase text-xs opacity-80">Conquered By</div>
+                   <select value={transferVictim} onChange={e=>setTransferVictim(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none cursor-pointer">
+                      <option value="">-- Select Conqueror --</option>
+                      {enemyAlliance.map(n => <option key={n} value={n}>{n}</option>)}
+                   </select>
+                   <div className="flex gap-2 mt-4">
+                       <button onClick={() => {
+                           if (!transferVictim) return alert("Select a conqueror");
+                           transferFactory(nation.name, transferVictim, transferFactoryData.id);
+                           setTransferFactoryData(null);
+                           setTransferVictim('');
+                       }} className="flex-1 bg-blue-800 text-white shadow-sm border border-black font-bold py-2 uppercase hover:bg-blue-700 active:scale-95">Transfer</button>
+                       <button onClick={() => {setTransferFactoryData(null); setTransferVictim('');}} className="flex-1 bg-red-900 border text-white shadow-sm border-black font-bold py-2 uppercase hover:bg-red-800 active:scale-95">Cancel</button>
+                   </div>
+               </div>
+           )}
+
            <div className="flex flex-col gap-1 text-sm max-h-[120px] overflow-y-auto">
                {factories.map(f => (
                    <div key={f.id} className="flex justify-between items-center bg-black/20 p-1 px-2 text-xs border border-current shadow-[2px_2px_0_0_rgba(0,0,0,0.5)]">
@@ -301,10 +324,14 @@ function NationCard({ nation, isEditable }) {
                            <div className={cn("font-bold px-1.5 border min-w-[36px] text-center", f.damage > 0 ? "bg-red-800 text-white border-red-900" : "bg-black/20 border-current opacity-80")}>
                                Dmg: {f.damage}
                            </div>
-                           {isEditable && (
+                            {isEditable && (
                                <div className="flex gap-1 ml-1">
                                     <button onClick={() => updateFactoryDamage(nation.name, f.id, 1)} title="Add 1 Damage (Bombing Raid)" className="w-6 h-5 bg-red-900 text-white flex justify-center items-center font-bold hover:bg-red-700 active:scale-95">+</button>
+                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, 1, true)} disabled={!f.repairedThisTurn} title="Undo Repair (Refund 1 IPC)" className={cn("w-6 h-5 flex justify-center items-center font-bold active:scale-95", f.repairedThisTurn ? "bg-amber-500 text-black hover:bg-amber-400" : "bg-black/40 text-white/50 cursor-not-allowed")}>↩️</button>
                                     <button onClick={() => updateFactoryDamage(nation.name, f.id, -1)} title="Repair 1 Damage (Cost: 1 IPC Bank)" className="w-6 h-5 bg-green-700 text-white flex justify-center items-center font-bold hover:bg-green-600 active:scale-95">-</button>
+                                    <button onClick={() => {
+                                        setTransferFactoryData({ id: f.id, name: f.name, capacity: f.capacity });
+                                    }} title="Transfer Factory to conqueror" className="w-6 h-5 bg-blue-800 text-white flex justify-center text-xs pb-0.5 items-center hover:bg-blue-700 active:scale-95">🔄</button>
                                     <button onClick={() => { if(window.confirm(`Discard ${f.name} factory?`)) removeFactory(nation.name, f.id); }} className="w-6 h-5 bg-black/80 text-white flex justify-center items-center hover:bg-red-800 active:scale-95"><Trash2 size={12} /></button>
                                </div>
                            )}
@@ -347,9 +374,11 @@ function LobbyScreen() {
   const handleCreate = async (e) => {
     e.preventDefault();
     if(newRoomName.trim()) {
-      const pwd = prompt('Enter an optional password to protect this operation (leave blank for public access):') || '';
+      const mPwd = prompt('MANDATORY: Enter a Master Password to manage this room (Banker, Delete, Reset):');
+      if (!mPwd) return alert('Master Password is required to create a room!');
+      const pwd = prompt('Enter an optional Room Password for other players (leave blank for public access):') || '';
       try {
-        await setGameId({ gameId: newRoomName.trim(), password: pwd, isCreating: true });
+        await setGameId({ gameId: newRoomName.trim(), password: pwd, masterPassword: mPwd, isCreating: true });
       } catch (err) {
         alert(`ERROR: ${err.message}`);
       }
@@ -456,7 +485,7 @@ function LobbyScreen() {
 }
 
 function App() {
-  const { gameId, setGameId, initSocket, gameData, nations, logs, role, setRole, connected, resetGame, currentTurn } = useGameStore();
+  const { gameId, setGameId, initSocket, gameData, nations, logs, role, setRole, connected, resetGame, currentTurn, verifyMasterPassword } = useGameStore();
 
   useEffect(() => {
     initSocket();
@@ -507,7 +536,18 @@ function App() {
            <span className="font-bold mr-2 uppercase tracking-wide self-center">Role:</span>
            <select 
               value={role} 
-              onChange={(e) => setRole(e.target.value)}
+              onChange={(e) => {
+                  const newRole = e.target.value;
+                  if (newRole === 'banker') {
+                      const pwd = prompt("Enter Master Password to access Banker role:");
+                      if (!pwd) return;
+                      verifyMasterPassword(pwd)
+                          .then(() => setRole(newRole))
+                          .catch(err => alert("Access Denied: " + err.message));
+                  } else {
+                      setRole(newRole);
+                  }
+              }}
               className="bg-transparent font-bold capitalize outline-none"
            >
               <option value="banker">Game Master (Banker)</option>
@@ -571,14 +611,15 @@ function App() {
             {role === 'banker' && (
                 <button 
                   onClick={() => {
-                      const pwd = prompt("Enter Master Admin Code to authorize complete Server Data Wipe:");
-                      if (pwd === "562656") {
-                          if (window.confirm("CRITICAL WARNING: This will permanently erase this operation's database. Proceed?")) {
-                              resetGame();
-                          }
-                      } else if (pwd !== null) {
-                          alert("AUTHORIZATION DENIED.");
-                      }
+                      const pwd = prompt("Enter Master Password to authorize complete Server Data Wipe:");
+                      if (!pwd) return;
+                      verifyMasterPassword(pwd)
+                          .then(() => {
+                              if (window.confirm("CRITICAL WARNING: This will permanently erase this operation's database. Proceed?")) {
+                                  resetGame(pwd).catch(e => alert(e.message));
+                              }
+                          })
+                          .catch(err => alert("AUTHORIZATION DENIED."));
                   }}
                   className="vintage-btn text-red-800 bg-red-100 flex justify-center items-center gap-2 mt-4"
                 >

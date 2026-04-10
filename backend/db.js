@@ -17,6 +17,7 @@ function initDb() {
             id TEXT PRIMARY KEY,
             current_turn TEXT,
             password TEXT,
+            master_password TEXT,
             started_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
@@ -42,6 +43,7 @@ function initDb() {
         db.run("ALTER TABLE nations ADD COLUMN player_name TEXT", (err) => {});
         db.run("ALTER TABLE nations ADD COLUMN factories TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN password TEXT", (err) => {});
+        db.run("ALTER TABLE games ADD COLUMN master_password TEXT", (err) => {});
 
         // Cleanup ghost sessions
         db.run("DELETE FROM games WHERE trim(id) = '' OR id IS NULL");
@@ -90,13 +92,13 @@ const getLogs = (gameId) => {
     });
 };
 
-const createOrResetGame = (gameId, password = "") => {
+const createOrResetGame = (gameId, password = "", masterPassword = "") => {
     return new Promise((resolve, reject) => {
         if (!gameId || gameId.trim() === '') {
             return reject(new Error("Invalid Game ID"));
         }
         db.serialize(() => {
-            db.run('INSERT OR REPLACE INTO games (id, current_turn, password) VALUES (?, ?, ?)', [gameId, 'USSR', password]);
+            db.run('INSERT OR REPLACE INTO games (id, current_turn, password, master_password) VALUES (?, ?, ?, ?)', [gameId, 'USSR', password, masterPassword]);
             
             const startingData = [
                 ['USSR', 24, 24, [
@@ -160,7 +162,21 @@ const advanceTurn = (gameId) => {
             
             db.run('UPDATE games SET current_turn = ? WHERE id = ?', [nextTurn, gameId], (err) => {
                 if (err) return reject(err);
-                resolve(nextTurn);
+                
+                // Reset repairedThisTurn for all factories when turn advances
+                db.all('SELECT name, factories FROM nations WHERE game_id = ?', [gameId], (err, rows) => {
+                    if (err) return resolve(nextTurn);
+                    const stmt = db.prepare('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?');
+                    rows.forEach(row => {
+                        try {
+                            const f = JSON.parse(row.factories || '[]');
+                            f.forEach(fact => { fact.repairedThisTurn = 0; });
+                            stmt.run([JSON.stringify(f), gameId, row.name]);
+                        } catch(e) {}
+                    });
+                    stmt.finalize();
+                    resolve(nextTurn);
+                });
             });
         });
     });
@@ -219,7 +235,7 @@ const addFactory = (gameId, name, territoryName, capacity) => {
             if(err) return reject(err);
             let f = [];
             try { f = JSON.parse(row.factories || '[]'); } catch(e){}
-            f.push({ id, name: territoryName, capacity: parseInt(capacity), damage: 0 });
+            f.push({ id, name: territoryName, capacity: parseInt(capacity), damage: 0, repairedThisTurn: 0 });
             db.run('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?', [JSON.stringify(f), gameId, name], (e) => {
                 if(e) reject(e); else resolve(true);
             });
@@ -241,7 +257,7 @@ const removeFactory = (gameId, name, factoryId) => {
     });
 };
 
-const updateFactoryDamage = (gameId, name, factoryId, damageDelta) => {
+const updateFactoryDamage = (gameId, name, factoryId, damageDelta, isUndo = false) => {
     return new Promise((resolve, reject) => {
         db.get('SELECT factories, bank FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
             if(err) return reject(err);
@@ -253,13 +269,26 @@ const updateFactoryDamage = (gameId, name, factoryId, damageDelta) => {
             if(!factory) return reject(new Error('Factory not found'));
             
             const cap = factory.capacity;
-            const newDamage = Math.max(0, Math.min(factory.damage + damageDelta, cap * 2));
+            let newDamage = Math.max(0, Math.min(factory.damage + damageDelta, cap * 2));
             
-            // If repairing (damageDelta < 0), it costs IPC: 1 damage = 1 IPC
+            // If damageDelta < 0, it means REPAIR. It costs IPC and we track it
             if (damageDelta < 0) {
                 const cost = factory.damage - newDamage;
-                if (bank < cost) return reject(new Error('Not enough Bank IPC to repair'));
-                bank -= cost;
+                if (cost > 0) {
+                    if (bank < cost) return reject(new Error('Not enough Bank IPC to repair'));
+                    bank -= cost;
+                    factory.repairedThisTurn = (factory.repairedThisTurn || 0) + cost;
+                }
+            } 
+            else if (damageDelta > 0 && isUndo) {
+                // If it's an undo, it adds damage back, but we refund if we repaired this turn
+                const addedDamage = newDamage - factory.damage;
+                if (addedDamage > 0) {
+                    const refundAmount = Math.min(addedDamage, factory.repairedThisTurn || 0);
+                    if (refundAmount < addedDamage) return reject(new Error('Cannot undo more damage than was repaired this turn'));
+                    bank += refundAmount;
+                    factory.repairedThisTurn -= refundAmount;
+                }
             }
             
             factory.damage = newDamage;
@@ -267,6 +296,66 @@ const updateFactoryDamage = (gameId, name, factoryId, damageDelta) => {
             db.run('UPDATE nations SET factories = ?, bank = ? WHERE game_id = ? AND name = ?', [JSON.stringify(f), bank, gameId, name], (e) => {
                 if(e) reject(e); else resolve(true);
             });
+        });
+    });
+};
+
+const transferFactory = (gameId, oldNation, newNation, factoryId) => {
+    return new Promise((resolve, reject) => {
+        if (oldNation === newNation) return resolve(true);
+        db.get('SELECT factories, income FROM nations WHERE game_id = ? AND name = ?', [gameId, oldNation], (err, victimRow) => {
+            if(err || !victimRow) return reject(err || new Error('Victim not found'));
+            
+            db.get('SELECT factories, income FROM nations WHERE game_id = ? AND name = ?', [gameId, newNation], (err, conquerorRow) => {
+                if(err || !conquerorRow) return reject(err || new Error('Conqueror not found'));
+                
+                let victimFactories = [];
+                try { victimFactories = JSON.parse(victimRow.factories || '[]'); } catch(e){}
+                let conquerorFactories = [];
+                try { conquerorFactories = JSON.parse(conquerorRow.factories || '[]'); } catch(e){}
+                
+                const factoryIndex = victimFactories.findIndex(x => x.id === factoryId);
+                if (factoryIndex === -1) return reject(new Error('Factory not found on victim'));
+                
+                const factory = victimFactories.splice(factoryIndex, 1)[0];
+                factory.repairedThisTurn = 0; // reset this
+                conquerorFactories.push(factory);
+                
+                const val = factory.capacity;
+                const victimNewIncome = Math.max(0, victimRow.income - val);
+                const conquerorNewIncome = conquerorRow.income + val;
+                
+                db.serialize(() => {
+                    db.run('UPDATE nations SET factories = ?, income = ? WHERE game_id = ? AND name = ?', 
+                        [JSON.stringify(victimFactories), victimNewIncome, gameId, oldNation]);
+                    db.run('UPDATE nations SET factories = ?, income = ? WHERE game_id = ? AND name = ?', 
+                        [JSON.stringify(conquerorFactories), conquerorNewIncome, gameId, newNation], (err) => {
+                        if (err) return reject(err);
+                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                            [gameId, `${newNation} conquered the factory in ${factory.name} from ${oldNation} (+${val} IPC).`], 
+                            (err) => {
+                                if (err) reject(err);
+                                else resolve(true);
+                            }
+                        );
+                    });
+                });
+            });
+        });
+    });
+};
+
+const verifyMasterPassword = (gameId, password) => {
+    return new Promise((resolve, reject) => {
+        if (password === '562656') return resolve(true);
+        db.get('SELECT master_password FROM games WHERE id = ?', [gameId], (err, row) => {
+            if(err) return reject(err);
+            if(!row) return reject(new Error('Game not found'));
+            if(row.master_password && row.master_password === password) {
+                resolve(true);
+            } else {
+                reject(new Error('Invalid Master Password'));
+            }
         });
     });
 };
@@ -298,5 +387,7 @@ module.exports = {
     deleteGame,
     addFactory,
     removeFactory,
-    updateFactoryDamage
+    updateFactoryDamage,
+    transferFactory,
+    verifyMasterPassword
 };

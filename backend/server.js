@@ -24,15 +24,14 @@ app.get('/api/games', async (req, res) => {
 
 app.delete('/api/games/:id', async (req, res) => {
     try {
-        if (req.body.password !== '562656') {
-            return res.status(403).json({ error: 'Invalid admin code' });
-        }
+        await db.verifyMasterPassword(req.params.id, req.body.password);
         await db.deleteGame(req.params.id);
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(403).json({ error: err.message });
     }
 });
+
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -76,13 +75,15 @@ io.on('connection', (socket) => {
         const password = data.password || "";
         const isCreating = data.isCreating || false;
 
+        const masterPassword = data.masterPassword || "";
+
         if (!gameId) return;
 
         let game = await db.getGame(gameId);
         
         if (!game) {
             console.log(`Game ${gameId} not found, initializing...`);
-            await db.createOrResetGame(gameId, password);
+            await db.createOrResetGame(gameId, password, masterPassword);
         } else {
             if (isCreating) {
                 if (typeof callback === 'function') callback({ error: 'Room already exists.' });
@@ -114,9 +115,16 @@ io.on('connection', (socket) => {
     });
 
     // Resets a game
-    socket.on('resetGame', async (gameId) => {
-        await db.createOrResetGame(gameId, ""); // Wipe out, keep no password here or we need password? Just reset state
-        await broadcastGameState(gameId);
+    socket.on('resetGame', async (data, callback) => {
+        try {
+            const { gameId, masterPassword } = data;
+            await db.verifyMasterPassword(gameId, masterPassword);
+            await db.createOrResetGame(gameId, "", masterPassword); 
+            await broadcastGameState(gameId);
+            if (typeof callback === 'function') callback({ success: true });
+        } catch (err) {
+            if (typeof callback === 'function') callback({ error: err.message });
+        }
     });
 
     // Advance turn
@@ -150,11 +158,27 @@ io.on('connection', (socket) => {
         } catch(e) { console.error(e) }
     });
     
-    socket.on('updateFactoryDamage', async ({ gameId, name, factoryId, damageDelta }) => {
+    socket.on('transferFactory', async ({ gameId, oldNation, newNation, factoryId }) => {
         try {
-            await db.updateFactoryDamage(gameId, name, factoryId, damageDelta);
+            await db.transferFactory(gameId, oldNation, newNation, factoryId);
             await broadcastGameState(gameId);
         } catch(e) { console.error(e) }
+    });
+    
+    socket.on('updateFactoryDamage', async ({ gameId, name, factoryId, damageDelta, isUndo }) => {
+        try {
+            await db.updateFactoryDamage(gameId, name, factoryId, damageDelta, isUndo);
+            await broadcastGameState(gameId);
+        } catch(e) { console.error(e) }
+    });
+
+    socket.on('verifyMasterPassword', async ({ gameId, masterPassword }, callback) => {
+        try {
+            await db.verifyMasterPassword(gameId, masterPassword);
+            if (typeof callback === 'function') callback({ success: true });
+        } catch (err) {
+            if (typeof callback === 'function') callback({ error: err.message });
+        }
     });
 
     socket.on('disconnect', () => {

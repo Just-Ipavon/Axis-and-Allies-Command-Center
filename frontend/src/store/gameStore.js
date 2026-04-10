@@ -132,13 +132,37 @@ export const useGameStore = create((set, get) => ({
         socket.emit('removeFactory', { gameId, name, factoryId });
     },
     
-    updateFactoryDamage: (name, factoryId, damageDelta) => {
+    updateFactoryDamage: (name, factoryId, damageDelta, isUndo = false) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('updateFactoryDamage', { gameId, name, factoryId, damageDelta });
+        socket.emit('updateFactoryDamage', { gameId, name, factoryId, damageDelta, isUndo });
+    },
+    
+    transferFactory: (oldNation, newNation, factoryId) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('transferFactory', { gameId, oldNation, newNation, factoryId });
     },
 
-    resetGame: () => {
-        socket.emit('resetGame', get().gameId);
+    verifyMasterPassword: (masterPassword) => {
+        return new Promise((resolve, reject) => {
+            const { gameId } = get();
+            if(!gameId) return reject(new Error('No game connected'));
+            socket.emit('verifyMasterPassword', { gameId, masterPassword }, (res) => {
+                if (res && res.error) reject(new Error(res.error));
+                else resolve(true);
+            });
+        });
+    },
+
+    resetGame: (masterPassword) => {
+        return new Promise((resolve, reject) => {
+            const { gameId } = get();
+            if(!gameId) return reject();
+            socket.emit('resetGame', { gameId, masterPassword }, (res) => {
+                if (res && res.error) reject(new Error(res.error));
+                else resolve(true);
+            });
+        });
     }
 }));
