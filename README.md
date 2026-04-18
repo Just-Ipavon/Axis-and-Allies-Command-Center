@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎖️ Axis Companion: The Command Center
+# 🎖️ Axis & Allies: Command Center
 
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E)](https://vitejs.dev/)
@@ -15,83 +15,83 @@
 
 <br>
 
-**Un'applicazione web asincrona real-time pensata per digitalizzare la complessa macroeconomia e lo storico operativo delle partite da tavolo a _Axis & Allies: 1942 Second Edition_.**
+**A real-time, asynchronous web application designed to digitize the complex macroeconomics and operational history of tabletop matches for _Axis & Allies: 1942 Second Edition_.**
 
 </div>
 
 ---
 
-## 🧭 Panoramica Architetturale Generale
+## 🧭 Architectural Overview
 
-Il progetto adotta un approccio **Monorepo** con un'impalcatura fortemente asincrona, governata in tempo reale. Non essendoci refresh della pagina e basandosi l'intero state management su WebSockets full-duplex, i giocatori vedono le schede nazione (fondi, complessi industriali, danni strutturali, code di produzione) aggiornarsi istantaneamente tra i loro dispositivi tablet e telefoni non appena avvengono le operazioni.
+The project relies on a **Monorepo** approach with a heavily asynchronous, real-time infrastructure. By eliminating page reloads and basing the entire state management on full-duplex WebSockets, players can watch nation dashboards (funds, industrial complexes, structural damage, production queues) update instantly across their tablets and smartphones as actions occur.
 
-Il **Backend Server** (Express) agisce in una duplice veste tecnica: fornisce le API WebSocket persistendo i dati su file fisico SQLite e funge anche da **Static Web Server** per servire nativamente i _bundle_ pre-compilati di React.
-
----
-
-## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" width="24" height="24" align="center" /> Il Frontend (Visualizzazione Logica)
-
-Sviluppato impiegando il Modern React Stack (`Vite`, `React Hooks`, `TailwindCSS` per stilizzazione utility-first pura ispirata al modern-vintage militare).
-
-### L'Albero dei Componenti Visivi (`/frontend/src/components/`)
-
-- **`LobbyScreen.jsx`**: Punto di ingresso isolato dall'infrastruttura di gioco. Esegue `fetchRooms` esposte via RestAPI, garantisce il meccanismo di protezione per gli ambienti protetti (`master_password`) con feedback di connessione diretta col server.
-- **`NationCard.jsx`**: Il controller primario di interazione del giocatore. Gestisce le transazioni:
-  - **Calcoli Capacità Fabbriche**: Itera su `nation.purchases` aggregando i dati correnti coi tetti di base dati da `nation.factories.capacity` deducendo in live i malus di `factory.damage`.
-  - **Combat Modali In-App**: Inserisce l'interfaccia condizionale assoluta per la spoliazione bancaria e la sottrazione del target _Income_ per conquista territoriale.
-- **`MiniNationCard.jsx`**: Modulo minimale e destrutturato adoperato per creare a griglia i report globali per i player avversari, permettendo la supervisione totale del tavolo in sola lettura.
-
-### Gestione Globale dello Stato (`/frontend/src/store/gameStore.js`)
-
-Abbiamo depennato l'eccesso logico di Context Providers adottando **Zustand**. Il _gameStore_ funge sia da Memoria di Frontiera che da Dispatcher dei socket:
-
-- **`Persistenza Locale`**: Anziché perdere il filo in caso di crash o blocco browser, rilegge attivamente `localStorage.getItem('axis_role')` re-inoltrando automaticamente il join e mascherando la riconnessione dietro le quinte.
-- **`Gestore Eventi WebHooks`**: I socket `socket.emit('updateNation')` e derivati per conquiste/fabbriche non invadono la UI, sono relegati ad azioni pulite nello store.
+The **Backend Server** (Express) plays a dual technical role: it provides WebSocket APIs while persisting data to a physical SQLite file, and it also acts as a **Static Web Server** to natively serve the pre-compiled React bundles (`dist/`).
 
 ---
 
-## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" width="24" height="24" align="center" /> Il Backend Server
+## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" width="24" height="24" align="center" /> The Frontend (Visual Controller)
 
-Il nucleo affidabile implementato integralmente nello script `server.js` con un accesso nativo isolato in `db.js`. Non fa uso degli ORM per massimizzare le performance e l'accesso concorrenziale puro SQLite ad elevato traffico di payload WebSocket.
+Developed using the Modern React Stack (`Vite`, `React Hooks`) and fully styled via utility-first `TailwindCSS` with a military-inspired vintage theme.
 
-### `server.js` - Routing Socket Avanzato
+### UI Component Tree (`/frontend/src/components/`)
 
-Fornisce il re-broadcast ottimizzato tramite stanza `io.to(gameId).emit()`.
+- **`LobbyScreen.jsx`**: The isolated entryway. It fetches the available operations via RestAPI and supports the new **Direct Connect** feature. You can join private/public rooms using either the full Title or a unique, 6-character hexadecimal Room ID (e.g. `#8FK2J1`). Password challenges are handled dynamically.
+- **`NationCard.jsx`**: The primary player interaction controller. Handles:
+  - **Dynamic Factory Capacity**: Iterates through pending `purchases`, matching base capacities bound to rigid 1942 rules (`eastern US -> max 12`), actively subtracting structural `damage`.
+  - **In-App Combat Modal**: Inserts a conditional modal to manage territory conquests seamlessly, instantly draining/enriching targeted IPC budgets.
+- **`MiniNationCard.jsx`**: A minimal, destructured grid-module used to render a read-only global overview of all enemy nations, providing unparalleled table supervision.
 
-- **Mitigazioni Concorrenza (Smart Play-time)**: Se il socket disconnette, cattura il `Date.now()` di allontanamento calcolando nativamente i secondi spesi senza poller client. Al `joinGame` ripristina la progressione decifrando i blocchi di assenza utente.
-- **RestAPI Gateway**: Esposizione base al routing HTTPS con `express.static(...)` per inviare il _build_ React prodotto da `/frontend/dist`.
-- **Security Check**: Header limitati da `helmet` e prelievo di sessioni fantasma limitato su `/api/` grazie a `express-rate-limit`.
+### Global State Management (`/frontend/src/store/gameStore.js`)
 
-### `db.js` - Le Transazioni SQLite Dirette
+We transitioned from bloated React Context Providers to **Zustand**. The _gameStore_ functions as a Memory Frontier and Socket Dispatcher:
 
-Gestisce istanze multiple concorrenti di aggiornamenti:
-
-- **Calcolo Dinamico dei Danni Strutturali (`updateFactoryDamage`)**: Il DB esegue controlli logici durante un `REPAIR` della fabbrica, sottraendo IPC se e solo se la Banca asincrona lo permette (`bank < cost => REJECT`).
-- **Trasferimento Dinamico Infrastrutture (`transferFactory`)**: Una macro-query sposta interi oggetti JSON di una fabbrica dalla cella nativa a quella conquistatrice con reset calcolato del contatore `repairedThisTurn`.
-- **Pulizia del Data-leakage**: Nel processo d'avvio (`initDb`), pulisce qualsiasi istanza malformata lasciata pendente da interruzioni fatali della macchina di servizio.
-
-### `gameConfig.js` - Isolamento Configurazione Hard-coded
-
-Tutti i valori deterministici della _"Second Edition 1942"_ sono distaccati dalla logica di persistenza:
-
-- **Income Pre-impostato**: `USSR(24)`, `Germany(41)`, `UK(31)`, `Japan(30)`, `USA(42)`.
-- **Compliance delle Fabbriche USA e Asse**: Configurate esattamente in IPC value di restrizione al territorio ospite (Es. `Eastern US -> Capacity 12`).
+- **Intelligent Role Persistence**: Connects users to previous sessions reading `localStorage.getItem('axis_role')` on crashes. The new Smart-Switch logic instantly purges out-of-date roles if a user deliberately shifts from one Operation lobby to another.
+- **WebHooks Event Handler**: Complex interactions like `updateFactoryDamage` or `transferFactory` are handled immutably and synced via background `socket.emit` dispatches, leaving the UI exceptionally clean.
 
 ---
 
-## 🖥 Guida Operativa di Deploy: Ambiente in Produzione
+## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" width="24" height="24" align="center" /> The Backend Server
 
-Poiché l'Applicazione Backend serve nativamente i build compilati (nessun server intermedio dev è richiesto in uso finale), si utilizza il robusto unificatore `PM2` per clusterizzare l'avvio in background del processo di Node:
+The core logic lies strictly within `server.js` and securely isolated inside `db.js`. It intentionally avoids ORMs to maximize concurrency performance on heavy WebSocket payload traffic using native SQL.
+
+### `server.js` - Routing & Socket Handlers
+
+- **Unique Operation Identifiers**: Creates random JS Hex IDs directly mapping them to custom-created "Room Titles" in the database.
+- **Concurrency Mitigation (Smart Play-time)**: When all sockets disconnect, the script catches the departure `Date.now()`. Upon any subsequent `joinGame`, it safely restores the progression timer bypassing client-pollers and ensuring 100% time accuracy.
+- **Security Check**: Header limits enforced by `helmet` and phantom-session scraping contained on `/api/` endpoints via `express-rate-limit`.
+
+### `db.js` - SQLite Sub-transactions
+
+- **Factory Status Evaluation**: SQLite logically executes structural `REPAIR`, accepting IPC withdrawals only if the asynchronous Bank verification evaluates as positive (`bank >= cost`).
+- **Dynamic Infrastructure Transfers**: Triggers macro-queries that shift entire `factories` JSON blocks from victim to conqueror, forcefully resetting temporary `repairedThisTurn` increments.
+- **Game Data Cleanup**: In the boot phase (`initDb`), it actively flushes empty or malformed rooms left hanging by fatal server stops.
+
+### `gameConfig.js` - Hard-coded Rules Isolation
+
+All deterministic starting values for the _"Second Edition 1942"_ rulebook are strictly detached from runtime logic:
+
+- **Starting Incomes**: `USSR(24)`, `Germany(41)`, `UK(31)`, `Japan(30)`, `USA(42)`.
+- **Infrastructure Compliance**: Validated matching capacities across historically accurate zones.
+
+---
+
+## 🖥 Production Deployment Guide
+
+Since the Backend Application simultaneously serves the compiled React build, no intermediary dev servers are required for production. Use the robust process manager `PM2` to automatically cluster Node processes in the background:
 
 ```html
-<!-- 1. Acquisizione degli asset ottimizzati per l'interfaccia React -->
-<kbd>cd frontend</kbd>
-<kbd>npm run build</kbd>
+<!-- 1. Clone the repo and setup `.env` -->
+<kbd>cp backend/.env.example backend/.env</kbd>
 
-<!-- 2. Bootstrap definitivo del Cluster tramite process manager PM2 -->
+<!-- 2. Generate optimized static assets for the React interface -->
+<kbd>cd frontend</kbd>
+<kbd>npm install && npm run build</kbd>
+
+<!-- 3. Final Cluster Bootstrap via PM2 process manager -->
 <kbd>cd ../backend</kbd>
+<kbd>npm install</kbd>
 <kbd>pm2 start server.js --name "axis-companion"</kbd>
 
-<!-- 3. Sigillo del dump per garantire l'avvio al prossimo boot fisico della macchina linux -->
+<!-- 4. Seal the dump to ensure startup at the next physical Linux machine boot -->
 <kbd>pm2 save</kbd>
 ```
