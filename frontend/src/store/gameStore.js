@@ -5,7 +5,7 @@ const API_BASE = import.meta.env.DEV ? 'http://localhost:1942' : '';
 const socket = io(import.meta.env.DEV ? 'http://localhost:1942' : '/');
 
 const savedGameId = localStorage.getItem('axis_gameId');
-const savedRole = localStorage.getItem('axis_role') || 'banker';
+const savedRole = localStorage.getItem('axis_role') || '';
 
 export const useGameStore = create((set, get) => ({
     gameId: savedGameId || null, 
@@ -17,7 +17,11 @@ export const useGameStore = create((set, get) => ({
     connected: false,
 
     setRole: (role) => {
-        localStorage.setItem('axis_role', role);
+        if (role) {
+            localStorage.setItem('axis_role', role);
+        } else {
+            localStorage.removeItem('axis_role');
+        }
         set({ role });
     },
     

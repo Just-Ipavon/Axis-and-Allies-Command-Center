@@ -3,11 +3,26 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const db = require('./db');
 
 const app = express();
+app.use(helmet({
+  contentSecurityPolicy: false, // Often requires config for React, disabling for now to prevent breaking changes unless configured
+}));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
+
+// Rate limiting for API endpoints
+const apiLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+	standardHeaders: true, 
+	legacyHeaders: false, 
+});
+
+app.use('/api/', apiLimiter);
 
 // Serve static files from the React frontend build
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
@@ -65,17 +80,46 @@ async function broadcastGameState(gameId) {
     }
 }
 
+const truncateString = (str, num) => {
+    if (typeof str !== 'string') return '';
+    if (str.length <= num) {
+      return str;
+    }
+    return str.slice(0, num);
+};
+
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
+
+    const handleLeave = async (gameId) => {
+        if (!gameId) return;
+        socket.leave(gameId);
+        const room = io.sockets.adapter.rooms.get(gameId);
+        if (!room || room.size === 0) {
+            let game = await db.getGame(gameId);
+            if (game && game.last_resume_at) {
+                let sessionTime = Math.floor((Date.now() - game.last_resume_at) / 1000);
+                await db.updateGameTime(gameId, (game.play_time || 0) + sessionTime, null, Date.now());
+            }
+        }
+    };
+
+    socket.on('leaveGame', async (gameId) => {
+        await handleLeave(truncateString(gameId, 50));
+        socket.gameId = null;
+    });
 
     // Join a game room
     socket.on('joinGame', async (data, callback) => {
         if (!data) return;
-        const gameId = typeof data === 'string' ? data : data.gameId;
-        const password = data.password || "";
+        let gameId = typeof data === 'string' ? data : data.gameId;
+        gameId = truncateString(gameId, 50);
+        let password = data.password || "";
+        password = truncateString(password, 50);
         const isCreating = data.isCreating || false;
 
-        const masterPassword = data.masterPassword || "";
+        let masterPassword = data.masterPassword || "";
+        masterPassword = truncateString(masterPassword, 50);
 
         if (!gameId) return;
 
@@ -94,9 +138,29 @@ io.on('connection', (socket) => {
                 return;
             }
         }
+        
+        if (socket.gameId && socket.gameId !== gameId) {
+            await handleLeave(socket.gameId);
+        }
 
         socket.join(gameId);
+        socket.gameId = gameId;
         console.log(`Socket ${socket.id} joined game ${gameId}`);
+        
+        game = await db.getGame(gameId); // re-fetch to get newest info
+        const roomSize = io.sockets.adapter.rooms.get(gameId)?.size || 1;
+        
+        if (roomSize === 1 && game.last_empty_at !== null) {
+            let newPlayTime = game.play_time || 0;
+            const emptyDur = Date.now() - game.last_empty_at;
+            if (emptyDur < 3600000) { // < 1 hour
+                newPlayTime += Math.floor(emptyDur / 1000);
+            }
+            await db.updateGameTime(gameId, newPlayTime, Date.now(), null);
+        } else if (roomSize === 1 && game.last_resume_at === null) {
+            await db.updateGameTime(gameId, game.play_time || 0, Date.now(), null);
+        }
+
         await broadcastGameState(gameId);
         if (typeof callback === 'function') callback({ success: true });
     });
@@ -104,11 +168,11 @@ io.on('connection', (socket) => {
     // Handle updates to nation's income, bank or player name
     socket.on('updateNation', async ({ gameId, name, income, bank, purchases, playerName, logMessage }) => {
         try {
-            await db.updateNationStatus(gameId, name, income, bank, purchases, playerName);
+            await db.updateNationStatus(truncateString(gameId, 50), truncateString(name, 50), income, bank, purchases, truncateString(playerName, 50));
             if (logMessage) {
-                await db.addLog(gameId, logMessage);
+                await db.addLog(truncateString(gameId, 50), truncateString(logMessage, 200));
             }
-            await broadcastGameState(gameId);
+            await broadcastGameState(truncateString(gameId, 50));
         } catch (err) {
             console.error('Error updating nation:', err);
         }
@@ -118,9 +182,10 @@ io.on('connection', (socket) => {
     socket.on('resetGame', async (data, callback) => {
         try {
             const { gameId, masterPassword } = data;
-            await db.verifyMasterPassword(gameId, masterPassword);
-            await db.createOrResetGame(gameId, "", masterPassword); 
-            await broadcastGameState(gameId);
+            const cleanGameId = truncateString(gameId, 50);
+            await db.verifyMasterPassword(cleanGameId, truncateString(masterPassword, 50));
+            await db.createOrResetGame(cleanGameId, "", truncateString(masterPassword, 50)); 
+            await broadcastGameState(cleanGameId);
             if (typeof callback === 'function') callback({ success: true });
         } catch (err) {
             if (typeof callback === 'function') callback({ error: err.message });
@@ -130,8 +195,9 @@ io.on('connection', (socket) => {
     // Advance turn
     socket.on('advanceTurn', async (gameId) => {
         try {
-            await db.advanceTurn(gameId);
-            await broadcastGameState(gameId);
+            const cleanGameId = truncateString(gameId, 50);
+            await db.advanceTurn(cleanGameId);
+            await broadcastGameState(cleanGameId);
         } catch(e) { console.error(e) }
     });
 
@@ -139,50 +205,65 @@ io.on('connection', (socket) => {
     socket.on('conquerTerritory', async (data) => {
         try {
             const { gameId, conqueror, victim, value, targetType } = data;
-            await db.conquerTerritory(gameId, conqueror, victim, value, targetType);
-            await broadcastGameState(gameId);
+            const cleanGameId = truncateString(gameId, 50);
+            await db.conquerTerritory(cleanGameId, truncateString(conqueror, 50), truncateString(victim, 50), value, truncateString(targetType, 50));
+            await broadcastGameState(cleanGameId);
         } catch(e) { console.error(e) }
     });
 
     socket.on('addFactory', async ({ gameId, name, territoryName, capacity }) => {
         try {
-            await db.addFactory(gameId, name, territoryName, capacity);
-            await broadcastGameState(gameId);
+            const cleanGameId = truncateString(gameId, 50);
+            await db.addFactory(cleanGameId, truncateString(name, 50), truncateString(territoryName, 100), capacity);
+            await broadcastGameState(cleanGameId);
         } catch(e) { console.error(e) }
     });
     
     socket.on('removeFactory', async ({ gameId, name, factoryId }) => {
         try {
-            await db.removeFactory(gameId, name, factoryId);
-            await broadcastGameState(gameId);
+            const cleanGameId = truncateString(gameId, 50);
+            await db.removeFactory(cleanGameId, truncateString(name, 50), truncateString(factoryId, 50));
+            await broadcastGameState(cleanGameId);
         } catch(e) { console.error(e) }
     });
     
     socket.on('transferFactory', async ({ gameId, oldNation, newNation, factoryId }) => {
         try {
-            await db.transferFactory(gameId, oldNation, newNation, factoryId);
-            await broadcastGameState(gameId);
+            const cleanGameId = truncateString(gameId, 50);
+            await db.transferFactory(cleanGameId, truncateString(oldNation, 50), truncateString(newNation, 50), truncateString(factoryId, 50));
+            await broadcastGameState(cleanGameId);
         } catch(e) { console.error(e) }
     });
     
     socket.on('updateFactoryDamage', async ({ gameId, name, factoryId, damageDelta, isUndo }) => {
         try {
-            await db.updateFactoryDamage(gameId, name, factoryId, damageDelta, isUndo);
-            await broadcastGameState(gameId);
+            const cleanGameId = truncateString(gameId, 50);
+            await db.updateFactoryDamage(cleanGameId, truncateString(name, 50), truncateString(factoryId, 50), damageDelta, isUndo);
+            await broadcastGameState(cleanGameId);
         } catch(e) { console.error(e) }
     });
 
     socket.on('verifyMasterPassword', async ({ gameId, masterPassword }, callback) => {
         try {
-            await db.verifyMasterPassword(gameId, masterPassword);
+            await db.verifyMasterPassword(truncateString(gameId, 50), truncateString(masterPassword, 50));
             if (typeof callback === 'function') callback({ success: true });
         } catch (err) {
             if (typeof callback === 'function') callback({ error: err.message });
         }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
         console.log('User disconnected:', socket.id);
+        if (socket.gameId) {
+            const room = io.sockets.adapter.rooms.get(socket.gameId);
+            if (!room || room.size === 0) {
+                let game = await db.getGame(socket.gameId);
+                if (game && game.last_resume_at) {
+                    let sessionTime = Math.floor((Date.now() - game.last_resume_at) / 1000);
+                    await db.updateGameTime(socket.gameId, (game.play_time || 0) + sessionTime, null, Date.now());
+                }
+            }
+        }
     });
 });
 

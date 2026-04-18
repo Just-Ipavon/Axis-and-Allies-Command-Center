@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { TURN_ORDER, STARTING_DATA } = require('./gameConfig');
 
 const dbPath = path.resolve(__dirname, 'game.db');
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -18,7 +19,10 @@ function initDb() {
             current_turn TEXT,
             password TEXT,
             master_password TEXT,
-            started_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            play_time INTEGER DEFAULT 0,
+            last_resume_at INTEGER,
+            last_empty_at INTEGER
         )`);
 
         db.run(`CREATE TABLE IF NOT EXISTS nations (
@@ -44,6 +48,9 @@ function initDb() {
         db.run("ALTER TABLE nations ADD COLUMN factories TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN password TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN master_password TEXT", (err) => {});
+        db.run("ALTER TABLE games ADD COLUMN play_time INTEGER DEFAULT 0", (err) => {});
+        db.run("ALTER TABLE games ADD COLUMN last_resume_at INTEGER", (err) => {});
+        db.run("ALTER TABLE games ADD COLUMN last_empty_at INTEGER", (err) => {});
 
         // Cleanup ghost sessions
         db.run("DELETE FROM games WHERE trim(id) = '' OR id IS NULL");
@@ -98,33 +105,11 @@ const createOrResetGame = (gameId, password = "", masterPassword = "") => {
             return reject(new Error("Invalid Game ID"));
         }
         db.serialize(() => {
-            db.run('INSERT OR REPLACE INTO games (id, current_turn, password, master_password) VALUES (?, ?, ?, ?)', [gameId, 'USSR', password, masterPassword]);
-            
-            const startingData = [
-                ['USSR', 24, 24, [
-                    { id: 'f-ussr1', name: 'Russia', capacity: 8, damage: 0 },
-                    { id: 'f-ussr2', name: 'Caucasus', capacity: 4, damage: 0 },
-                    { id: 'f-ussr3', name: 'Karelia S.S.R.', capacity: 2, damage: 0 }
-                ]],
-                ['Germany', 41, 41, [
-                    { id: 'f-ger1', name: 'Germany', capacity: 10, damage: 0 },
-                    { id: 'f-ger2', name: 'Southern Europe', capacity: 6, damage: 0 }
-                ]],
-                ['UK', 31, 31, [
-                    { id: 'f-uk1', name: 'United Kingdom', capacity: 8, damage: 0 },
-                    { id: 'f-uk2', name: 'India', capacity: 3, damage: 0 }
-                ]],
-                ['Japan', 30, 30, [
-                    { id: 'f-jap1', name: 'Japan', capacity: 8, damage: 0 }
-                ]],
-                ['USA', 42, 42, [
-                    { id: 'f-usa1', name: 'Eastern US', capacity: 20, damage: 0 },
-                    { id: 'f-usa2', name: 'Western US', capacity: 10, damage: 0 }
-                ]]
-            ];
+            const now = Date.now();
+            db.run('INSERT OR REPLACE INTO games (id, current_turn, password, master_password, play_time, last_resume_at, last_empty_at) VALUES (?, ?, ?, ?, 0, ?, NULL)', [gameId, 'USSR', password, masterPassword, now]);
             
             const stmt = db.prepare('INSERT OR REPLACE INTO nations (game_id, name, income, bank, purchases, player_name, factories) VALUES (?, ?, ?, ?, ?, ?, ?)');
-            startingData.forEach(data => {
+            STARTING_DATA.forEach(data => {
                 stmt.run([gameId, data[0], data[1], data[2], JSON.stringify({}), '', JSON.stringify(data[3] || [])]);
             });
             stmt.finalize();
@@ -149,7 +134,18 @@ const updateNationStatus = (gameId, name, income, bank, purchases, playerName) =
     });
 };
 
-const TURN_ORDER = ['USSR', 'Germany', 'UK', 'Japan', 'USA'];
+const updateGameTime = (gameId, playTime, lastResumeAt, lastEmptyAt) => {
+    return new Promise((resolve, reject) => {
+        db.run(
+            'UPDATE games SET play_time = ?, last_resume_at = ?, last_empty_at = ? WHERE id = ?',
+            [playTime, lastResumeAt, lastEmptyAt, gameId],
+            (err) => {
+                if (err) reject(err);
+                resolve(true);
+            }
+        );
+    });
+};
 
 const advanceTurn = (gameId) => {
     return new Promise((resolve, reject) => {
@@ -389,5 +385,6 @@ module.exports = {
     removeFactory,
     updateFactoryDamage,
     transferFactory,
-    verifyMasterPassword
+    verifyMasterPassword,
+    updateGameTime
 };
