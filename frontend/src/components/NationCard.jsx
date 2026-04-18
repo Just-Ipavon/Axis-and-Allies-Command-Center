@@ -5,7 +5,7 @@ import { cn } from '../utils/styles';
 import { UNITS } from '../constants/gameData';
 
 export default function NationCard({ nation, isEditable }) {
-  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory } = useGameStore();
+  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
   const canCollect = isEditable && isMyTurn;
@@ -19,8 +19,10 @@ export default function NationCard({ nation, isEditable }) {
 
   const requestAdminMode = () => {
       const pwd = prompt("Enter Master Admin Code to manually override IPC values:");
-      if (pwd === "562656") setAdminEditMode(true);
-      else alert("Access Denied");
+      if (!pwd) return;
+      verifyMasterPassword(pwd)
+          .then(() => setAdminEditMode(true))
+          .catch(err => alert("Access Denied: " + err.message));
   };
 
   const AXIS = ['Germany', 'Japan'];

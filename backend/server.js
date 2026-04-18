@@ -127,13 +127,15 @@ io.on('connection', (socket) => {
         
         if (!game) {
             console.log(`Game ${gameId} not found, initializing...`);
-            await db.createOrResetGame(gameId, password, masterPassword);
+            await db.createOrResetGame(gameId, password, masterPassword, data.roomName || 'Unknown Operation');
         } else {
             if (isCreating) {
                 if (typeof callback === 'function') callback({ error: 'Room already exists.' });
                 return;
             }
-            if (game.password && game.password !== password) {
+            try {
+                await db.verifyRoomPassword(gameId, password);
+            } catch (err) {
                 if (typeof callback === 'function') callback({ error: 'Invalid password.' });
                 return;
             }
@@ -184,7 +186,8 @@ io.on('connection', (socket) => {
             const { gameId, masterPassword } = data;
             const cleanGameId = truncateString(gameId, 50);
             await db.verifyMasterPassword(cleanGameId, truncateString(masterPassword, 50));
-            await db.createOrResetGame(cleanGameId, "", truncateString(masterPassword, 50)); 
+            const game = await db.getGame(cleanGameId);
+            await db.createOrResetGame(cleanGameId, "", truncateString(masterPassword, 50), game ? game.room_name : 'Unknown Operation'); 
             await broadcastGameState(cleanGameId);
             if (typeof callback === 'function') callback({ success: true });
         } catch (err) {

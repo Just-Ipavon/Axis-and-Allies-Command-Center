@@ -89,7 +89,8 @@ export const useGameStore = create((set, get) => ({
             if (!joinData) {
                 localStorage.removeItem('axis_gameId');
                 localStorage.removeItem('axis_password');
-                set({ gameId: null });
+                localStorage.removeItem('axis_role');
+                set({ gameId: null, role: '' });
                 return resolve(true);
             }
             const payload = typeof joinData === 'string' ? { gameId: joinData } : joinData;
@@ -97,6 +98,11 @@ export const useGameStore = create((set, get) => ({
                 if (res && res.error) {
                     reject(new Error(res.error));
                 } else {
+                    const prevGameId = localStorage.getItem('axis_gameId');
+                    if (prevGameId && prevGameId !== payload.gameId) {
+                        localStorage.removeItem('axis_role');
+                        set({ role: '' });
+                    }
                     localStorage.setItem('axis_gameId', payload.gameId);
                     if (payload.password) localStorage.setItem('axis_password', payload.password);
                     set({ gameId: payload.gameId });

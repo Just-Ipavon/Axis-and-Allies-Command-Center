@@ -44,16 +44,24 @@ function App() {
       {/* HEADER */}
       <header className="flex flex-col md:flex-row justify-between items-center border-b-4 border-vintage-text pb-4 gap-4">
         <div>
-           <h1 className="text-4xl md:text-5xl flex items-center gap-2">
+           <h1 className="text-4xl md:text-5xl flex items-center gap-2 mb-2">
               <Shield className="w-10 h-10" />
               Axis & Allies 1942
            </h1>
-           <div className="opacity-70 text-sm mt-1 flex items-center gap-3">
-             <span className="flex items-center gap-1"><Clock size={14} /> Room: <strong>{gameData.id}</strong></span>
+           
+           <div className="flex flex-wrap items-center gap-4 mb-2">
+              <div className="bg-amber-400 text-black border-2 border-black px-3 py-1 font-mono font-bold text-lg tracking-widest uppercase shadow-[2px_2px_0_0_rgba(0,0,0,1)]">
+                 CODE: {gameData.id}
+              </div>
+              <div className="text-xl font-bold uppercase tracking-wide">
+                 {gameData.room_name || `Room ${gameData.id}`}
+              </div>
+           </div>
+
+           <div className="opacity-70 text-sm mt-1 flex flex-wrap items-center gap-3">
+             <span className="flex items-center gap-1"><Clock size={14} /> {connected ? 'Secure Connection' : 'Radio Silence'}</span>
              <span>•</span>
-             <span>{connected ? 'Secure Connection' : 'Radio Silence'}</span>
-             <span>•</span>
-             <button onClick={() => setGameId(null)} className="flex items-center gap-1 underline hover:text-red-800"><LogOut size={14} /> Leave Room</button>
+             <button onClick={() => setGameId(null)} className="flex items-center gap-1 underline hover:text-red-800 font-bold"><LogOut size={14} /> Leave Operation</button>
            </div>
 
            {/* TURN ORDER HEADER */}

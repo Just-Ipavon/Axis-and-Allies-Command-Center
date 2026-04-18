@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { TURN_ORDER, STARTING_DATA } = require('./gameConfig');
+const { hashPassword, verifyPassword } = require('./auth');
 
 const dbPath = path.resolve(__dirname, 'game.db');
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -12,14 +13,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
 });
 
-function initDb() {
+const initDb = () => {
     db.serialize(() => {
         db.run(`CREATE TABLE IF NOT EXISTS games (
             id TEXT PRIMARY KEY,
+            room_name TEXT,
             current_turn TEXT,
             password TEXT,
             master_password TEXT,
-            started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             play_time INTEGER DEFAULT 0,
             last_resume_at INTEGER,
             last_empty_at INTEGER
@@ -51,6 +52,7 @@ function initDb() {
         db.run("ALTER TABLE games ADD COLUMN play_time INTEGER DEFAULT 0", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN last_resume_at INTEGER", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN last_empty_at INTEGER", (err) => {});
+        db.run("ALTER TABLE games ADD COLUMN room_name TEXT", (err) => {});
 
         // Cleanup ghost sessions
         db.run("DELETE FROM games WHERE trim(id) = '' OR id IS NULL");
@@ -65,7 +67,7 @@ function initDb() {
 // Helpers
 const getGamesList = () => {
     return new Promise((resolve, reject) => {
-        db.all('SELECT id, started_at, CASE WHEN password IS NOT NULL AND password != "" THEN 1 ELSE 0 END as hasPassword FROM games ORDER BY started_at DESC', [], (err, rows) => {
+        db.all('SELECT id, room_name, CASE WHEN password IS NOT NULL AND password != "" THEN 1 ELSE 0 END as hasPassword FROM games ORDER BY id DESC', [], (err, rows) => {
             if (err) reject(err);
             resolve(rows);
         });
@@ -99,14 +101,16 @@ const getLogs = (gameId) => {
     });
 };
 
-const createOrResetGame = (gameId, password = "", masterPassword = "") => {
+const createOrResetGame = (gameId, password = "", masterPassword = "", roomName = "Operation Enigma") => {
     return new Promise((resolve, reject) => {
         if (!gameId || gameId.trim() === '') {
             return reject(new Error("Invalid Game ID"));
         }
+        const hashedPwd = hashPassword(password);
+        const hashedMaster = hashPassword(masterPassword);
         db.serialize(() => {
             const now = Date.now();
-            db.run('INSERT OR REPLACE INTO games (id, current_turn, password, master_password, play_time, last_resume_at, last_empty_at) VALUES (?, ?, ?, ?, 0, ?, NULL)', [gameId, 'USSR', password, masterPassword, now]);
+            db.run('INSERT OR REPLACE INTO games (id, room_name, current_turn, password, master_password, play_time, last_resume_at, last_empty_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)', [gameId, roomName, 'USSR', hashedPwd, hashedMaster, 0, now]);
             
             const stmt = db.prepare('INSERT OR REPLACE INTO nations (game_id, name, income, bank, purchases, player_name, factories) VALUES (?, ?, ?, ?, ?, ?, ?)');
             STARTING_DATA.forEach(data => {
@@ -343,14 +347,31 @@ const transferFactory = (gameId, oldNation, newNation, factoryId) => {
 
 const verifyMasterPassword = (gameId, password) => {
     return new Promise((resolve, reject) => {
-        if (password === '562656') return resolve(true);
+        if (process.env.ADMIN_OVERRIDE_PASSWORD && password === process.env.ADMIN_OVERRIDE_PASSWORD) return resolve(true);
         db.get('SELECT master_password FROM games WHERE id = ?', [gameId], (err, row) => {
             if(err) return reject(err);
             if(!row) return reject(new Error('Game not found'));
-            if(row.master_password && row.master_password === password) {
+            if (verifyPassword(password, row.master_password)) {
                 resolve(true);
             } else {
                 reject(new Error('Invalid Master Password'));
+            }
+        });
+    });
+};
+
+const verifyRoomPassword = (gameId, password) => {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT password FROM games WHERE id = ?', [gameId], (err, row) => {
+            if(err) return reject(err);
+            if(!row) return reject(new Error('Game not found'));
+            
+            if (!row.password || row.password === "") return resolve(true);
+
+            if (verifyPassword(password, row.password)) {
+                resolve(true);
+            } else {
+                reject(new Error('Invalid Room Password'));
             }
         });
     });
@@ -386,5 +407,6 @@ module.exports = {
     updateFactoryDamage,
     transferFactory,
     verifyMasterPassword,
+    verifyRoomPassword,
     updateGameTime
 };

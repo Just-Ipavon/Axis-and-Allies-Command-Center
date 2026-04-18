@@ -6,6 +6,7 @@ import { cn } from '../utils/styles';
 export default function LobbyScreen() {
   const { setGameId, availableRooms, fetchRooms, connected, deleteRoom } = useGameStore();
   const [newRoomName, setNewRoomName] = useState('');
+  const [directJoinId, setDirectJoinId] = useState('');
 
   useEffect(() => {
     fetchRooms();
@@ -18,11 +19,33 @@ export default function LobbyScreen() {
       if (!mPwd) return alert('Master Password is required to create a room!');
       const pwd = prompt('Enter an optional Room Password for other players (leave blank for public access):') || '';
       try {
-        await setGameId({ gameId: newRoomName.trim(), password: pwd, masterPassword: mPwd, isCreating: true });
+        const generatedId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        await setGameId({ gameId: generatedId, roomName: newRoomName.trim(), password: pwd, masterPassword: mPwd, isCreating: true });
       } catch (err) {
         alert(`ERROR: ${err.message}`);
       }
     }
+  };
+
+  const handleDirectJoin = async (e) => {
+      e.preventDefault();
+      if (!directJoinId.trim()) return;
+      const cleanId = directJoinId.trim().toUpperCase();
+      try {
+          await setGameId({ gameId: cleanId, password: '' });
+      } catch (err) {
+          if (err.message === 'Invalid Room Password' || err.message === 'Invalid password.') {
+              const pwd = prompt(`Operazione #${cleanId} protetta. Inserisci la Password:`);
+              if (pwd === null) return;
+              try {
+                  await setGameId({ gameId: cleanId, password: pwd });
+              } catch (e2) {
+                  alert(`Accesso Negato: ${e2.message}`);
+              }
+          } else {
+              alert(`Errore: ${err.message}`);
+          }
+      }
   };
 
   const handleJoin = async (room) => {
@@ -83,7 +106,7 @@ export default function LobbyScreen() {
                       className="flex-1 text-left px-3 py-2 bg-vintage-bg border border-vintage-text/50 hover:bg-black/10 active:scale-[0.98] transition-all font-bold flex justify-between items-center"
                     >
                       <span className="flex items-center gap-2">
-                          {room.id} 
+                          {room.room_name || room.id}
                           {room.hasPassword ? <Lock size={14} className="opacity-70" /> : null}
                       </span>
                       <span className="text-xs opacity-50 uppercase">Join &rarr;</span>
@@ -115,6 +138,23 @@ export default function LobbyScreen() {
               />
               <button type="submit" className="vintage-btn whitespace-nowrap">
                 Create
+              </button>
+            </form>
+          </div>
+
+          <div className="pt-4 border-t-2 border-vintage-text/20">
+            <h3 className="font-bold uppercase tracking-wide mb-3">Direct Connect</h3>
+            <form onSubmit={handleDirectJoin} className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Enter 6-char Operation ID" 
+                value={directJoinId}
+                onChange={e => setDirectJoinId(e.target.value.toUpperCase())}
+                className="flex-1 bg-vintage-bg border-2 border-vintage-text p-2 outline-none focus:bg-white/50 uppercase placeholder:normal-case font-bold"
+                required
+              />
+              <button type="submit" className="vintage-btn whitespace-nowrap">
+                Join
               </button>
             </form>
           </div>
