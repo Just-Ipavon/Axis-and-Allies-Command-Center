@@ -17,11 +17,12 @@
 
 **A real-time, asynchronous web application designed to digitize the complex macroeconomics and operational history of tabletop matches for _Axis & Allies: 1942 Second Edition_.**
 ![screenshot](https://cdn.imgchest.com/files/ce71cb90c021.png)
+
 </div>
 
 ---
 
-## 🧭 Architectural Overview
+## Architectural Overview
 
 The project relies on a **Monorepo** approach with a heavily asynchronous, real-time infrastructure. By eliminating page reloads and basing the entire state management on full-duplex WebSockets, players can watch nation dashboards (funds, industrial complexes, structural damage, production queues) update instantly across their tablets and smartphones as actions occur.
 
@@ -29,7 +30,7 @@ The **Backend Server** (Express) plays a dual technical role: it provides WebSoc
 
 ---
 
-## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" width="24" height="24" align="center" /> The Frontend (Visual Controller)
+## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" width="24" height="24" align="center" /> Frontend
 
 Developed using the Modern React Stack (`Vite`, `React Hooks`) and fully styled via utility-first `TailwindCSS` with a military-inspired vintage theme.
 
@@ -50,7 +51,7 @@ The _gameStore_ functions as a Memory Frontier and Socket Dispatcher:
 
 ---
 
-## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" width="24" height="24" align="center" /> The Backend Server
+## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" width="24" height="24" align="center" /> Backend Server
 
 The core logic lies strictly within `server.js` and securely isolated inside `db.js`. It intentionally avoids ORMs to maximize concurrency performance on heavy WebSocket payload traffic using native SQL.
 
@@ -75,7 +76,7 @@ All deterministic starting values for the _"Second Edition 1942"_ rulebook are s
 
 ---
 
-## 🖥 Production Deployment Guide
+## Production Deployment Guide
 
 Since the Backend Application simultaneously serves the compiled React build, no intermediary dev servers are required for production. Use the robust process manager `PM2` to automatically cluster Node processes in the background:
 
