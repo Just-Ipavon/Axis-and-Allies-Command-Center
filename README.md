@@ -22,6 +22,22 @@
 
 ---
 
+## 📖 What is this app?
+
+**Axis & Allies: Command Center** is your digital assistant for tabletop matches of **Axis & Allies: 1942**. Say goodbye to pen, paper, and manual calculations! This app lets you and your friends focus on strategy by handling the complex math, economy, and logistics directly from your smartphones or tablets.
+
+### Key Features
+
+- **Smart Purchasing:** Buy units with ease. The app automatically calculates your remaining IPCs (money) and strictly enforces your factory production limits.
+- **Factory Exchanges:** When territories change hands on the board, simply transfer the factory to the conquering nation with a single tap. The system automatically adjusts incomes and updates production capacities for both players.
+- **Action Log:** Every purchase, combat result, and factory transfer is recorded in a global activity log. No more forgotten transactions or arguing over who bought what!
+- **Real-Time Sync:** See what your allies and enemies are doing instantly. The app updates everyone's screens in real-time as actions happen—no need to reload the page.
+- **Game Timer:** Keep track of how long your global war has been going on. If you need to stop your session, the timer completely saves your progress and resumes when you gather to play again.
+- **Direct Connect:** Join private/public rooms using the unique, 6-character hexadecimal Room ID (e.g. `#8FK2J1`).
+- **Automatic Turn Order:** The app automatically advances the turn order based on the game rules when income is collected.
+
+---
+
 ## Architectural Overview
 
 The project relies on a **Monorepo** approach with a heavily asynchronous, real-time infrastructure. By eliminating page reloads and basing the entire state management on full-duplex WebSockets, players can watch nation dashboards (funds, industrial complexes, structural damage, production queues) update instantly across their tablets and smartphones as actions occur.
