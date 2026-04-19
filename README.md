@@ -43,9 +43,9 @@ Developed using the Modern React Stack (`Vite`, `React Hooks`) and fully styled 
 
 ### Global State Management (`/frontend/src/store/gameStore.js`)
 
-We transitioned from bloated React Context Providers to **Zustand**. The _gameStore_ functions as a Memory Frontier and Socket Dispatcher:
+The _gameStore_ functions as a Memory Frontier and Socket Dispatcher:
 
-- **Intelligent Role Persistence**: Connects users to previous sessions reading `localStorage.getItem('axis_role')` on crashes. The new Smart-Switch logic instantly purges out-of-date roles if a user deliberately shifts from one Operation lobby to another.
+- **Intelligent Role Persistence**: Connects users to previous sessions role on crashes. The new Smart-Switch logic instantly purges out-of-date roles if a user deliberately shifts from one Operation lobby to another.
 - **WebHooks Event Handler**: Complex interactions like `updateFactoryDamage` or `transferFactory` are handled immutably and synced via background `socket.emit` dispatches, leaving the UI exceptionally clean.
 
 ---
