@@ -5,7 +5,7 @@
 @layer base {
   body {
     @apply bg-vintage-bg text-vintage-text font-typewriter min-h-screen;
-    background-image: linear-gradient(rgba(244, 236, 216, 0.8), rgba(244, 236, 216, 0.8)), url("https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fexplorepahistory.com%2Fkora%2Ffiles%2F1%2F2%2F1-2-1E2B-25-ExplorePAHistory-a0n0g6-a_349.jpg&f=1&nofb=1&ipt=d7c0bfc89e454061ea98a53e321dc1b69b6d64185043f18c324fd4411af7739e");
+    background-image: linear-gradient(rgba(244, 236, 216, 0.8), rgba(244, 236, 216, 0.8)), url("./assets/bg-warroom.jpg");
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
