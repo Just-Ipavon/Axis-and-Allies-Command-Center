@@ -142,12 +142,30 @@ export const useGameStore = create((set, get) => ({
         socket.emit('removeFactory', { gameId, name, factoryId });
     },
     
-    updateFactoryDamage: (name, factoryId, damageDelta, isUndo = false) => {
+    updateFactoryDamage: (name, factoryId, damageDelta, isUndo = false, isFree = false) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('updateFactoryDamage', { gameId, name, factoryId, damageDelta, isUndo });
+        socket.emit('updateFactoryDamage', { gameId, name, factoryId, damageDelta, isUndo, isFree });
     },
     
+    undoTurn: () => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('undoTurn', gameId);
+    },
+
+    lockPurchases: (name, logMessage) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('lockPurchases', { gameId, name, logMessage });
+    },
+
+    unlockPurchases: (name) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('unlockPurchases', { gameId, name });
+    },
+
     transferFactory: (oldNation, newNation, factoryId) => {
         const { gameId } = get();
         if(!gameId) return;

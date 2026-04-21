@@ -8,7 +8,7 @@ import NationCard from './components/NationCard';
 import MiniNationCard from './components/MiniNationCard';
 
 function App() {
-  const { gameId, setGameId, initSocket, gameData, nations, logs, role, setRole, connected, resetGame, currentTurn, verifyMasterPassword } = useGameStore();
+  const { gameId, setGameId, initSocket, gameData, nations, logs, role, setRole, connected, resetGame, currentTurn, verifyMasterPassword, undoTurn } = useGameStore();
 
   useEffect(() => {
     initSocket();
@@ -67,6 +67,18 @@ function App() {
            {/* TURN ORDER HEADER */}
            <div className="mt-4 flex flex-wrap gap-2 items-center">
                <span className="text-xs font-bold uppercase opacity-60 mr-2 border-b border-current">Sequence / Turn:</span>
+               {role === 'banker' && (
+                   <button 
+                       onClick={() => {
+                           if (window.confirm("Are you sure you want to undo the last turn? This will revert the collected income and step back one turn.")) {
+                               undoTurn();
+                           }
+                       }}
+                       className="mr-2 px-2 py-1 bg-red-800 text-white text-[10px] uppercase font-bold hover:bg-red-700 active:scale-95 flex items-center gap-1 shadow-sm border border-black"
+                   >
+                       <RotateCcw size={10} /> Undo Step
+                   </button>
+               )}
                {TURN_ORDER.map(t => (
                    <div key={t} className={cn("px-3 py-1 font-bold border-2 transition-all duration-300", 
                         currentTurn === t 

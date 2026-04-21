@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Lock, Unlock, Trash2, Swords } from 'lucide-react';
+import { Lock, Unlock, Trash2, Swords, ShoppingCart, RotateCcw } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { cn } from '../utils/styles';
 import { UNITS } from '../constants/gameData';
 
 export default function NationCard({ nation, isEditable }) {
-  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword } = useGameStore();
+  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
   const canCollect = isEditable && isMyTurn;
@@ -16,6 +16,11 @@ export default function NationCard({ nation, isEditable }) {
   const [adminEditMode, setAdminEditMode] = useState(false);
   const [transferFactoryData, setTransferFactoryData] = useState(null);
   const [transferVictim, setTransferVictim] = useState('');
+
+  const purchasesLocked = !!nation.purchases_locked;
+  const currentPurchases = nation.purchases || {};
+  const hasPurchases = Object.values(currentPurchases).some(qty => qty > 0);
+  const isBanker = role === 'banker';
 
   const requestAdminMode = () => {
       const pwd = prompt("Enter Master Admin Code to manually override IPC values:");
@@ -31,21 +36,21 @@ export default function NationCard({ nation, isEditable }) {
   const enemyAlliance = isAxis ? ALLIES : AXIS;
 
   const handleIncomeChange = (amount) => {
-    if (!isEditable) return;
+    if (!isEditable || (purchasesLocked && !isBanker)) return;
     const newIncome = nation.income + amount;
     const log = `${nation.name} income changed by ${amount} (Now: ${newIncome})`;
     updateNationBank(nation.name, newIncome, nation.bank, nation.purchases, nation.player_name, log);
   };
 
   const handleBankChange = (amount) => {
-      if (!isEditable) return;
+      if (!isEditable || (purchasesLocked && !isBanker)) return;
       const newBank = nation.bank + amount;
       const log = `${nation.name} bank changed by ${amount} directly (Now: ${newBank})`;
       updateNationBank(nation.name, nation.income, newBank, nation.purchases, nation.player_name, log);
   };
 
   const handleIncomeManualChange = (e) => {
-      if (!isEditable) return;
+      if (!isEditable || (purchasesLocked && !isBanker)) return;
       let val = e.target.value;
       if (val === '') val = 0;
       else val = parseInt(val) || 0;
@@ -53,7 +58,7 @@ export default function NationCard({ nation, isEditable }) {
   };
 
   const handleBankManualChange = (e) => {
-      if (!isEditable) return;
+      if (!isEditable || (purchasesLocked && !isBanker)) return;
       let val = e.target.value;
       if (val === '') val = 0;
       else val = parseInt(val) || 0;
@@ -63,14 +68,13 @@ export default function NationCard({ nation, isEditable }) {
   const factories = nation.factories || [];
   const totalCapacity = factories.reduce((sum, f) => sum + Math.max(0, parseInt(f.capacity || 0) - parseInt(f.damage || 0)), 0);
 
-  const currentPurchases = nation.purchases || {};
   let totalPurchased = 0;
   Object.entries(currentPurchases).forEach(([unit, qty]) => {
       if (unit !== 'Industrial Complex') totalPurchased += qty;
   });
 
   const handlePurchase = (unit, dQty) => {
-      if (!isEditable) return;
+      if (!isEditable || (purchasesLocked && !isBanker)) return;
       const currentQty = currentPurchases[unit] || 0;
       const newQty = currentQty + dQty;
 
@@ -105,21 +109,33 @@ export default function NationCard({ nation, isEditable }) {
       setBattleMode(false);
   };
 
-  const collectIncome = () => {
-      if (!isEditable) return;
-      
+  const handleConfirmCart = () => {
+      if (!isEditable || purchasesLocked) return;
       const items = Object.entries(nation.purchases || {})
           .filter(([_, qty]) => qty > 0)
           .map(([unit, qty]) => `${qty}x ${unit}`)
           .join(', ');
-          
-      const purchaseStr = items ? ` (Mobilized: ${items})` : '';
-      const log = `${nation.name} collects income (${nation.income} IPC).${purchaseStr}`;
       
-      // Also clear purchases for the new turn
-      updateNationBank(nation.name, nation.income, nation.bank + nation.income, {}, nation.player_name, log);
-      advanceTurn();
+      const log = `${nation.name} confirms purchases: ${items}`;
+      lockPurchases(nation.name, log);
   };
+
+   const collectIncome = () => {
+       if (!isEditable) return;
+       
+       if (!hasPurchases) {
+           if (!window.confirm("The cart is empty. Are you sure you want to collect income and pass the turn without mobilizing troops?")) {
+               return;
+           }
+       }
+       
+       // Generic log as requested: "Units mobilized and X IPC collected"
+       const log = `${nation.name} collects income (${nation.income} IPC). Units mobilized and funds secured.`;
+       
+       // Also clear purchases for the new turn
+       updateNationBank(nation.name, nation.income, nation.bank + nation.income, {}, nation.player_name, log);
+       advanceTurn();
+   };
 
   const handlePlayerNameChange = (e) => {
       if (!isEditable) return;
@@ -208,6 +224,11 @@ export default function NationCard({ nation, isEditable }) {
                </div>
             )}
          </div>
+         {isBanker && purchasesLocked && (
+             <button onClick={() => unlockPurchases(nation.name)} title="Banker: Unlock Cart" className="bg-amber-600 text-white px-2 py-1 rounded text-[10px] flex items-center gap-1 hover:bg-amber-500">
+                 <RotateCcw size={10} /> Unlock Cart
+             </button>
+         )}
       </div>
 
       {/* Purchase Section */}
@@ -216,7 +237,7 @@ export default function NationCard({ nation, isEditable }) {
              <h3 className="text-sm font-bold uppercase">Mobilization</h3>
              <span className="text-xs bg-white/20 px-2 py-0.5 font-bold shadow-sm border border-current">Capacity limit: {totalPurchased}/{totalCapacity}</span>
           </div>
-          <div className="flex flex-col gap-1 text-sm overflow-y-auto max-h-[170px] pr-1">
+          <div className={cn("flex flex-col gap-1 text-sm overflow-y-auto max-h-[170px] pr-1", purchasesLocked && !isBanker && "opacity-60 pointer-events-none")}>
              {Object.keys(UNITS).map(unit => {
                  const qty = (nation.purchases && nation.purchases[unit]) || 0;
                  return (
@@ -242,7 +263,7 @@ export default function NationCard({ nation, isEditable }) {
       </div>
 
       {/* Factories Management */}
-      <div className="mt-1 relative">
+      <div className={cn("mt-1 relative", purchasesLocked && !isBanker && "opacity-60 pointer-events-none")}>
            <div className="flex justify-between items-center mb-1">
                <h3 className="text-xs font-bold uppercase opacity-80">Industrial Complexes</h3>
                {isEditable && <button onClick={() => {
@@ -280,18 +301,29 @@ export default function NationCard({ nation, isEditable }) {
                            <span className="opacity-60 text-[10px]">Max Dmg: {f.capacity * 2}</span>
                        </div>
                        <div className="flex items-center gap-1">
-                           <div className={cn("font-bold px-1.5 border min-w-[36px] text-center", f.damage > 0 ? "bg-red-800 text-white border-red-900" : "bg-black/20 border-current opacity-80")}>
-                               Dmg: {f.damage}
-                           </div>
-                            {isEditable && (
+                           {adminEditMode ? (
+                               <input 
+                                   type="number" 
+                                   className="w-12 bg-black/40 border border-amber-500 text-amber-500 font-bold px-1 text-center outline-none"
+                                   value={f.damage}
+                                   onChange={(e) => {
+                                       const newVal = parseInt(e.target.value) || 0;
+                                       const delta = newVal - f.damage;
+                                       updateFactoryDamage(nation.name, f.id, delta, false, true); 
+                                   }}
+                               />
+                           ) : (
+                               <div className={cn("font-bold px-1.5 border min-w-[36px] text-center", f.damage > 0 ? "bg-red-800 text-white border-red-900" : "bg-black/20 border-current opacity-80")}>
+                                   Dmg: {f.damage}
+                               </div>
+                           )}
+
+                           {isEditable && (
                                <div className="flex gap-1 ml-1">
-                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, 1)} title="Add 1 Damage (Bombing Raid)" className="w-6 h-5 bg-red-900 text-white flex justify-center items-center font-bold hover:bg-red-700 active:scale-95">+</button>
-                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, 1, true)} disabled={!f.repairedThisTurn} title="Undo Repair (Refund 1 IPC)" className={cn("w-6 h-5 flex justify-center items-center font-bold active:scale-95", f.repairedThisTurn ? "bg-amber-500 text-black hover:bg-amber-400" : "bg-black/40 text-white/50 cursor-not-allowed")}>↩️</button>
-                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, -1)} title="Repair 1 Damage (Cost: 1 IPC Bank)" className="w-6 h-5 bg-green-700 text-white flex justify-center items-center font-bold hover:bg-green-600 active:scale-95">-</button>
-                                    <button onClick={() => {
-                                        setTransferFactoryData({ id: f.id, name: f.name, capacity: f.capacity });
-                                    }} title="Transfer Factory to conqueror" className="w-6 h-5 bg-blue-800 text-white flex justify-center text-xs pb-0.5 items-center hover:bg-blue-700 active:scale-95">🔄</button>
-                                    <button onClick={() => { if(window.confirm(`Discard ${f.name} factory?`)) removeFactory(nation.name, f.id); }} className="w-6 h-5 bg-black/80 text-white flex justify-center items-center hover:bg-red-800 active:scale-95"><Trash2 size={12} /></button>
+                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, 1)} title="Bombing Raid (+1 Damage)" className="w-6 h-5 bg-red-900 text-white flex justify-center items-center font-bold hover:bg-red-700 active:scale-95">+</button>
+                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, -1)} title="Repair (-1 Damage, Costs 1 IPC)" className="w-6 h-5 bg-green-700 text-white flex justify-center items-center font-bold hover:bg-green-600 active:scale-95">-</button>
+                                    <button onClick={() => setTransferFactoryData({ id: f.id, name: f.name, capacity: f.capacity })} title="Transfer Factory" className="w-6 h-5 bg-blue-800 text-white flex justify-center items-center hover:bg-blue-700 active:scale-95 text-[10px]">🔄</button>
+                                    <button onClick={() => { if(window.confirm(`Discard ${f.name} factory?`)) removeFactory(nation.name, f.id); }} className="w-6 h-5 bg-black/80 text-white flex justify-center items-center hover:bg-red-800 active:scale-95"><Trash2 size={10} /></button>
                                </div>
                            )}
                        </div>
@@ -303,12 +335,22 @@ export default function NationCard({ nation, isEditable }) {
 
       {isEditable && (
           <div className="pt-2 border-t-2 border-current/30 mt-auto flex justify-between gap-2 items-stretch h-12">
+              {isMyTurn && !purchasesLocked && hasPurchases && (
+                  <button onClick={handleConfirmCart} className="flex-1 bg-amber-500 text-black font-bold px-2 shadow hover:bg-amber-400 active:scale-95 flex items-center justify-center gap-1 text-[13px]">
+                      <ShoppingCart size={16} /> Confirm Cart
+                  </button>
+              )}
+
               <button onClick={() => setBattleMode(!battleMode)} className={cn("flex-1 flex justify-center items-center gap-1 font-bold px-3 shadow transition-all text-black text-[13px]", battleMode ? "bg-amber-400" : "bg-white/80 hover:bg-white")}>
                   <Swords size={18} /> Battle Report
               </button>
 
               {canCollect ? (
-                  <button onClick={collectIncome} className="bg-green-600/90 text-white font-bold px-4 border border-current shadow hover:bg-green-600 active:scale-95 flex-1 text-center">
+                  <button 
+                    onClick={collectIncome} 
+                    disabled={hasPurchases && !purchasesLocked}
+                    className={cn("font-bold px-4 border border-current shadow active:scale-95 flex-1 text-center", (hasPurchases && !purchasesLocked) ? "bg-gray-500 opacity-50 cursor-not-allowed" : "bg-green-600/90 text-white hover:bg-green-600")}
+                  >
                       Collect Income
                   </button>
               ) : (

@@ -47,6 +47,7 @@ const initDb = () => {
         // Ensure player_name, password and factories exist (if upgrading an existing DB)
         db.run("ALTER TABLE nations ADD COLUMN player_name TEXT", (err) => {});
         db.run("ALTER TABLE nations ADD COLUMN factories TEXT", (err) => {});
+        db.run("ALTER TABLE nations ADD COLUMN purchases_locked INTEGER DEFAULT 0", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN password TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN master_password TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN play_time INTEGER DEFAULT 0", (err) => {});
@@ -77,6 +78,15 @@ const getGamesList = () => {
 const getGame = (gameId) => {
     return new Promise((resolve, reject) => {
         db.get('SELECT * FROM games WHERE id = ?', [gameId], (err, row) => {
+            if (err) reject(err);
+            resolve(row);
+        });
+    });
+};
+
+const getGameByRoomName = (roomName) => {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT * FROM games WHERE LOWER(room_name) = LOWER(?)', [roomName], (err, row) => {
             if (err) reject(err);
             resolve(row);
         });
@@ -119,7 +129,7 @@ const createOrResetGame = (gameId, password = "", masterPassword = "", roomName 
             stmt.finalize();
 
             db.run('DELETE FROM logs WHERE game_id = ?', [gameId]);
-            db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, 'Stanza Creata: Inizio delle Operazioni.']);
+            db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, 'Room Created: Operations Commenced.']);
             resolve(true);
         });
     });
@@ -175,7 +185,11 @@ const advanceTurn = (gameId) => {
                         } catch(e) {}
                     });
                     stmt.finalize();
-                    resolve(nextTurn);
+                    
+                    // Reset purchases_locked for all nations when turn advances
+                    db.run('UPDATE nations SET purchases_locked = 0 WHERE game_id = ?', [gameId], () => {
+                        resolve(nextTurn);
+                    });
                 });
             });
         });
@@ -257,7 +271,7 @@ const removeFactory = (gameId, name, factoryId) => {
     });
 };
 
-const updateFactoryDamage = (gameId, name, factoryId, damageDelta, isUndo = false) => {
+const updateFactoryDamage = (gameId, name, factoryId, damageDelta, isUndo = false, isFree = false) => {
     return new Promise((resolve, reject) => {
         db.get('SELECT factories, bank FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
             if(err) return reject(err);
@@ -273,11 +287,13 @@ const updateFactoryDamage = (gameId, name, factoryId, damageDelta, isUndo = fals
             
             // If damageDelta < 0, it means REPAIR. It costs IPC and we track it
             if (damageDelta < 0) {
-                const cost = factory.damage - newDamage;
-                if (cost > 0) {
-                    if (bank < cost) return reject(new Error('Not enough Bank IPC to repair'));
-                    bank -= cost;
-                    factory.repairedThisTurn = (factory.repairedThisTurn || 0) + cost;
+                if (!isFree) {
+                    const cost = factory.damage - newDamage;
+                    if (cost > 0) {
+                        if (bank < cost) return reject(new Error('Not enough Bank IPC to repair'));
+                        bank -= cost;
+                        factory.repairedThisTurn = (factory.repairedThisTurn || 0) + cost;
+                    }
                 }
             } 
             else if (damageDelta > 0 && isUndo) {
@@ -390,9 +406,81 @@ const deleteGame = (gameId) => {
     });
 };
 
+const undoTurn = (gameId) => {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT current_turn FROM games WHERE id = ?', [gameId], (err, game) => {
+            if (err || !game) return reject(err || new Error('Game not found'));
+            
+            const currIdx = TURN_ORDER.indexOf(game.current_turn);
+            const prevIdx = (currIdx - 1 + TURN_ORDER.length) % TURN_ORDER.length;
+            const prevTurn = TURN_ORDER[prevIdx];
+            
+            db.run('UPDATE games SET current_turn = ? WHERE id = ?', [prevTurn, gameId], (err) => {
+                if (err) return reject(err);
+                
+                db.get('SELECT bank, income FROM nations WHERE game_id = ? AND name = ?', [gameId, prevTurn], (err, row) => {
+                    if (err || !row) return resolve(prevTurn);
+                    const newBank = Math.max(0, row.bank - row.income);
+                    
+                    db.serialize(() => {
+                        db.run('UPDATE nations SET bank = ?, purchases_locked = 0 WHERE game_id = ? AND name = ?', [newBank, gameId, prevTurn]);
+                        
+                        // Delete the most recent 'collects income' log for this nation
+                        db.run(`DELETE FROM logs WHERE id IN (
+                            SELECT id FROM logs 
+                            WHERE game_id = ? AND message LIKE ? 
+                            ORDER BY timestamp DESC LIMIT 1
+                        )`, [gameId, `${prevTurn} collects income%`]);
+                        
+                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                           [gameId, `The Banker has undone the turn. Cancelled the collection of +${row.income} IPC for ${prevTurn}.`], 
+                           () => resolve(prevTurn)
+                        );
+                    });
+                });
+            });
+        });
+    });
+};
+
+const lockPurchases = (gameId, name, logMessage) => {
+    return new Promise((resolve, reject) => {
+        db.run('UPDATE nations SET purchases_locked = 1 WHERE game_id = ? AND name = ?', [gameId, name], (err) => {
+            if (err) return reject(err);
+            if (logMessage) {
+                db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, logMessage], (err2) => {
+                    if (err2) reject(err2);
+                    else resolve(true);
+                });
+            } else {
+                resolve(true);
+            }
+        });
+    });
+};
+
+const unlockPurchases = (gameId, name) => {
+    return new Promise((resolve, reject) => {
+        db.run('UPDATE nations SET purchases_locked = 0 WHERE game_id = ? AND name = ?', [gameId, name], (err) => {
+            if (err) return reject(err);
+            
+            // Delete the most recent 'conferma acquisti' log for this nation
+            db.run(`DELETE FROM logs WHERE id IN (
+                SELECT id FROM logs 
+                WHERE game_id = ? AND message LIKE ? 
+                ORDER BY timestamp DESC LIMIT 1
+            )`, [gameId, `${name} confirms purchases:%`], (err2) => {
+                if (err2) reject(err2);
+                else resolve(true);
+            });
+        });
+    });
+};
+
 module.exports = {
     db,
     getGame,
+    getGameByRoomName,
     getGamesList,
     getNations,
     getLogs,
@@ -408,5 +496,8 @@ module.exports = {
     transferFactory,
     verifyMasterPassword,
     verifyRoomPassword,
-    updateGameTime
+    updateGameTime,
+    undoTurn,
+    lockPurchases,
+    unlockPurchases
 };

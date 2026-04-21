@@ -126,8 +126,21 @@ io.on('connection', (socket) => {
         let game = await db.getGame(gameId);
         
         if (!game) {
+            if (!isCreating) {
+                if (typeof callback === 'function') callback({ error: 'Room not found.' });
+                return;
+            }
+            
+            // Check if room name already exists
+            const roomName = data.roomName || 'Unknown Operation';
+            const existingByName = await db.getGameByRoomName(roomName);
+            if (existingByName) {
+                if (typeof callback === 'function') callback({ error: 'A room with this name already exists.' });
+                return;
+            }
+
             console.log(`Game ${gameId} not found, initializing...`);
-            await db.createOrResetGame(gameId, password, masterPassword, data.roomName || 'Unknown Operation');
+            await db.createOrResetGame(gameId, password, masterPassword, roomName);
         } else {
             if (isCreating) {
                 if (typeof callback === 'function') callback({ error: 'Room already exists.' });
@@ -204,6 +217,15 @@ io.on('connection', (socket) => {
         } catch(e) { console.error(e) }
     });
 
+    // Undo turn
+    socket.on('undoTurn', async (gameId) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.undoTurn(cleanGameId);
+            await broadcastGameState(cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+
     // Conquer Territory
     socket.on('conquerTerritory', async (data) => {
         try {
@@ -238,10 +260,10 @@ io.on('connection', (socket) => {
         } catch(e) { console.error(e) }
     });
     
-    socket.on('updateFactoryDamage', async ({ gameId, name, factoryId, damageDelta, isUndo }) => {
+    socket.on('updateFactoryDamage', async ({ gameId, name, factoryId, damageDelta, isUndo, isFree }) => {
         try {
             const cleanGameId = truncateString(gameId, 50);
-            await db.updateFactoryDamage(cleanGameId, truncateString(name, 50), truncateString(factoryId, 50), damageDelta, isUndo);
+            await db.updateFactoryDamage(cleanGameId, truncateString(name, 50), truncateString(factoryId, 50), damageDelta, isUndo, isFree);
             await broadcastGameState(cleanGameId);
         } catch(e) { console.error(e) }
     });
@@ -253,6 +275,20 @@ io.on('connection', (socket) => {
         } catch (err) {
             if (typeof callback === 'function') callback({ error: err.message });
         }
+    });
+
+    socket.on('lockPurchases', async ({ gameId, name, logMessage }) => {
+        try {
+            await db.lockPurchases(truncateString(gameId, 50), truncateString(name, 50), truncateString(logMessage, 500));
+            await broadcastGameState(truncateString(gameId, 50));
+        } catch(e) { console.error(e) }
+    });
+
+    socket.on('unlockPurchases', async ({ gameId, name }) => {
+        try {
+            await db.unlockPurchases(truncateString(gameId, 50), truncateString(name, 50));
+            await broadcastGameState(truncateString(gameId, 50));
+        } catch(e) { console.error(e) }
     });
 
     socket.on('disconnect', async () => {
