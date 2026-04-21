@@ -42,7 +42,7 @@
 
 The project relies on a **Monorepo** approach with a heavily asynchronous, real-time infrastructure. By eliminating page reloads and basing the entire state management on full-duplex WebSockets, players can watch nation dashboards (funds, industrial complexes, structural damage, production queues) update instantly across their tablets and smartphones as actions occur.
 
-The **Backend Server** (Express) plays a dual technical role: it provides WebSocket APIs while persisting data to a physical SQLite file, and it also acts as a **Static Web Server** to natively serve the pre-compiled React bundles (`dist/`).
+The **Backend Server** plays a dual technical role: it provides WebSocket APIs while persisting data to a physical SQLite file, and it also acts as a **Static Web Server** to natively serve the pre-compiled React bundles (`dist/`).
 
 ---
 
