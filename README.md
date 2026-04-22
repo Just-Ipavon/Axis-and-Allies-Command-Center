@@ -22,7 +22,7 @@
 
 ---
 
-## 📖 What is this app?
+##  What is this app?
 
 **Axis & Allies: Command Center** is your digital assistant for tabletop matches of **Axis & Allies: 1942**. Say goodbye to pen, paper, and manual calculations! This app lets you and your friends focus on strategy by handling the complex math, economy, and logistics directly from your smartphones or tablets.
 
