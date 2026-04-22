@@ -30,7 +30,7 @@
 
 /* Button hover offsets for a mechanical/typewriter feel */
 .vintage-btn {
-  @apply border-2 border-vintage-text bg-vintage-paper px-4 py-2 font-bold inset-0 shadow-[4px_4px_0_0_rgba(43,42,38,1)] active:shadow-[1px_1px_0_0_rgba(43,42,38,1)] active:translate-y-[3px] active:translate-x-[3px] transition-all;
+  @apply border-2 border-vintage-text bg-vintage-paper px-4 py-2 font-bold shadow-[4px_4px_0_0_rgba(43,42,38,1)] active:shadow-[1px_1px_0_0_rgba(43,42,38,1)] active:translate-y-[3px] active:translate-x-[3px] transition-all;
 }
 
 .card-vintage {

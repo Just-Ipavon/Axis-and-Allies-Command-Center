@@ -202,7 +202,7 @@ export default function NationCard({ nation, isEditable }) {
             )}
 
             {isEditable && battleMode && (
-               <div className="absolute top-12 left-0 text-sm bg-[#5c5647] text-[#f4ecd8] border-2 border-current shadow-xl p-3 z-50 w-64">
+               <div className="absolute top-12 left-0 text-sm bg-[#5c5647] text-[#f4ecd8] border-2 border-current shadow-xl p-3 z-50 w-full min-w-[240px] max-w-[280px]">
                    <div className="font-bold mb-1 uppercase text-xs opacity-80">Conquered Value</div>
                    <input type="number" value={battleValue} onChange={e=>setBattleValue(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none" min={1} />
                    
@@ -218,14 +218,14 @@ export default function NationCard({ nation, isEditable }) {
                       {enemyAlliance.map(n => <option key={n} value={n}>{n}</option>)}
                    </select>
                    <div className="flex gap-2 mt-4">
-                       <button onClick={handleConquer} className="flex-1 bg-green-700 text-white shadow-sm border border-black font-bold py-2 uppercase hover:bg-green-600 active:scale-95">Confirm</button>
-                       <button onClick={()=>setBattleMode(false)} className="flex-1 bg-red-900 border text-white shadow-sm border-black font-bold py-2 uppercase hover:bg-red-800 active:scale-95">Cancel</button>
+                       <button onClick={handleConquer} className="flex-1 bg-green-700 text-white shadow-sm border border-black font-bold py-2 uppercase hover:bg-green-600 active:scale-95 text-xs">Confirm</button>
+                       <button onClick={()=>setBattleMode(false)} className="flex-1 bg-red-900 border text-white shadow-sm border-black font-bold py-2 uppercase hover:bg-red-800 active:scale-95 text-xs">Cancel</button>
                    </div>
                </div>
             )}
          </div>
          {isBanker && purchasesLocked && (
-             <button onClick={() => unlockPurchases(nation.name)} title="Banker: Unlock Cart" className="bg-amber-600 text-white px-2 py-1 rounded text-[10px] flex items-center gap-1 hover:bg-amber-500">
+             <button onClick={() => unlockPurchases(nation.name)} title="Banker: Unlock Cart" className="bg-amber-600 text-white px-2 py-1 rounded text-[10px] flex items-center gap-1 hover:bg-amber-500 whitespace-nowrap">
                  <RotateCcw size={10} /> Unlock Cart
              </button>
          )}
@@ -233,25 +233,27 @@ export default function NationCard({ nation, isEditable }) {
 
       {/* Purchase Section */}
       <div className="flex-1 mt-2">
-          <div className="flex justify-between items-end mb-1 border-b border-current/20 pb-1">
+          <div className="flex justify-between items-end mb-1 border-b border-current/20 pb-1 flex-wrap gap-1">
              <h3 className="text-sm font-bold uppercase">Mobilization</h3>
-             <span className="text-xs bg-white/20 px-2 py-0.5 font-bold shadow-sm border border-current">Capacity limit: {totalPurchased}/{totalCapacity}</span>
+             <span className="text-[10px] bg-white/20 px-2 py-0.5 font-bold shadow-sm border border-current">Capacity: {totalPurchased}/{totalCapacity}</span>
           </div>
           <div className={cn("flex flex-col gap-1 text-sm overflow-y-auto max-h-[170px] pr-1", purchasesLocked && !isBanker && "opacity-60 pointer-events-none")}>
              {Object.keys(UNITS).map(unit => {
                  const qty = (nation.purchases && nation.purchases[unit]) || 0;
                  return (
                      <div key={unit} className="flex justify-between items-center bg-black/10 py-1.5 px-2">
-                         <div className="pr-1 flex items-baseline gap-2">
-                             <span>{unit}</span>
-                             <span className="opacity-50 text-[10px] font-bold">A{UNITS[unit].a} D{UNITS[unit].d} M{UNITS[unit].m}</span>
-                             <span className="opacity-80 text-xs font-bold text-amber-500/80">IPC {UNITS[unit].cost}</span>
+                         <div className="pr-1 flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+                             <span className="leading-tight">{unit}</span>
+                             <div className="flex gap-2 items-center">
+                                <span className="opacity-50 text-[10px] font-bold">A{UNITS[unit].a} D{UNITS[unit].d} M{UNITS[unit].m}</span>
+                                <span className="opacity-80 text-xs font-bold text-amber-500/80">IPC {UNITS[unit].cost}</span>
+                             </div>
                          </div>
                          {isEditable ? (
                          <div className="flex items-center gap-1">
                             <span className="opacity-70 text-xs w-2 text-right">{qty > 0 ? qty : ''}</span>
-                            <button onClick={() => handlePurchase(unit, -1)} className="bg-black/30 h-5 w-5 flex items-center justify-center hover:bg-black/50 active:scale-95">-</button>
-                            <button onClick={() => handlePurchase(unit, 1)} className="bg-white/30 text-black h-5 w-5 flex items-center justify-center hover:bg-white/50 active:scale-95">+</button>
+                            <button onClick={() => handlePurchase(unit, -1)} className="bg-black/30 h-6 w-6 flex items-center justify-center hover:bg-black/50 active:scale-95">-</button>
+                            <button onClick={() => handlePurchase(unit, 1)} className="bg-white/30 text-black h-6 w-6 flex items-center justify-center hover:bg-white/50 active:scale-95">+</button>
                          </div>
                          ) : (
                              <div className="font-bold">{qty > 0 ? `x${qty}` : ''}</div>
@@ -274,10 +276,10 @@ export default function NationCard({ nation, isEditable }) {
            </div>
 
            {isEditable && transferFactoryData && (
-               <div className="absolute top-8 left-0 text-sm bg-[#5c5647] text-[#f4ecd8] border-2 border-current shadow-xl p-3 z-50 w-[260px]">
-                   <div className="font-bold mb-2 uppercase text-xs">Transfer {transferFactoryData.name} ({transferFactoryData.capacity} IPC)</div>
+               <div className="absolute top-8 left-0 text-sm bg-[#5c5647] text-[#f4ecd8] border-2 border-current shadow-xl p-3 z-50 w-full min-w-[240px] max-w-[280px]">
+                   <div className="font-bold mb-2 uppercase text-xs">Transfer {transferFactoryData.name}</div>
                    <div className="font-bold mt-2 mb-1 uppercase text-xs opacity-80">Conquered By</div>
-                   <select value={transferVictim} onChange={e=>setTransferVictim(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none cursor-pointer">
+                   <select value={transferVictim} onChange={e=>setTransferVictim(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none cursor-pointer text-sm">
                       <option value="">-- Select Conqueror --</option>
                       {enemyAlliance.map(n => <option key={n} value={n}>{n}</option>)}
                    </select>
@@ -334,27 +336,27 @@ export default function NationCard({ nation, isEditable }) {
       </div>
 
       {isEditable && (
-          <div className="pt-2 border-t-2 border-current/30 mt-auto flex justify-between gap-2 items-stretch h-12">
+          <div className="pt-2 border-t-2 border-current/30 mt-auto flex justify-between gap-2 items-stretch min-h-[3rem]">
               {isMyTurn && !purchasesLocked && hasPurchases && (
-                  <button onClick={handleConfirmCart} className="flex-1 bg-amber-500 text-black font-bold px-2 shadow hover:bg-amber-400 active:scale-95 flex items-center justify-center gap-1 text-[13px]">
-                      <ShoppingCart size={16} /> Confirm Cart
+                  <button onClick={handleConfirmCart} className="flex-1 bg-amber-500 text-black font-bold px-2 py-2 shadow hover:bg-amber-400 active:scale-95 flex items-center justify-center gap-1 text-[13px] leading-tight">
+                      <ShoppingCart size={16} className="shrink-0" /> Confirm Cart
                   </button>
               )}
 
-              <button onClick={() => setBattleMode(!battleMode)} className={cn("flex-1 flex justify-center items-center gap-1 font-bold px-3 shadow transition-all text-black text-[13px]", battleMode ? "bg-amber-400" : "bg-white/80 hover:bg-white")}>
-                  <Swords size={18} /> Battle Report
+              <button onClick={() => setBattleMode(!battleMode)} className={cn("flex-1 flex justify-center items-center gap-1 font-bold px-3 py-2 shadow transition-all text-black text-[13px] leading-tight", battleMode ? "bg-amber-400" : "bg-white/80 hover:bg-white")}>
+                  <Swords size={18} className="shrink-0" /> Battle Report
               </button>
 
               {canCollect ? (
                   <button 
                     onClick={collectIncome} 
                     disabled={hasPurchases && !purchasesLocked}
-                    className={cn("font-bold px-4 border border-current shadow active:scale-95 flex-1 text-center", (hasPurchases && !purchasesLocked) ? "bg-gray-500 opacity-50 cursor-not-allowed" : "bg-green-600/90 text-white hover:bg-green-600")}
+                    className={cn("font-bold px-4 py-2 border border-current shadow active:scale-95 flex-1 flex items-center justify-center text-center text-[13px] leading-tight", (hasPurchases && !purchasesLocked) ? "bg-gray-500 opacity-50 cursor-not-allowed" : "bg-green-600/90 text-white hover:bg-green-600")}
                   >
                       Collect Income
                   </button>
               ) : (
-                  <div className="flex-1 border border-current font-bold bg-black/20 text-current flex justify-center items-center text-xs uppercase text-center leading-tight">
+                  <div className="flex-1 border border-current font-bold bg-black/20 text-current flex justify-center items-center text-xs uppercase text-center leading-tight py-2 px-1">
                       Not Your<br/>Turn
                   </div>
               )}
