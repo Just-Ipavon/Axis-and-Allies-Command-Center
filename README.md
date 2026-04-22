@@ -48,42 +48,51 @@ The **Backend Server** plays a dual technical role: it provides WebSocket APIs w
 
 ## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" width="24" height="24" align="center" /> Frontend
 
-Developed using the Modern React Stack (`Vite`, `React Hooks`) and fully styled via utility-first `TailwindCSS` with a military-inspired vintage theme.
+The frontend follows a **Feature-Based Architecture**, separating pages from UI components and business logic.
 
-### UI Component Tree (`/frontend/src/components/`)
+### Pages & Routing (`/frontend/src/pages/`)
 
-- **`LobbyScreen.jsx`**: The isolated entryway. It fetches the available operations via RestAPI and supports the new **Direct Connect** feature. You can join private/public rooms using either the full Title or a unique, 6-character hexadecimal Room ID (e.g. `#8FK2J1`). Password challenges are handled dynamically.
-- **`NationCard.jsx`**: The primary player interaction controller. Handles:
-  - **Dynamic Factory Capacity**: Iterates through pending `purchases`, matching base capacities bound to rigid 1942 rules (`eastern US -> max 12`), actively subtracting structural `damage`.
-  - **In-App Combat Modal**: Inserts a conditional modal to manage territory conquests seamlessly, instantly draining/enriching targeted IPC budgets.
-- **`MiniNationCard.jsx`**: A minimal, destructured grid-module used to render a read-only global overview of all enemy nations, providing unparalleled table supervision.
+- **`LobbyPage.jsx`**: The isolated entryway. It fetches the available operations via RestAPI and supports the **Direct Connect** feature.
+- **`GamePage.jsx`**: The main command center. It orchestrates the game state and coordinates the various feature components.
+
+### Feature Components (`/frontend/src/features/game/components/`)
+
+- **`GameHeader.jsx`**: Displays operational status, game code, sequence/turn order, and the mission timer.
+- **`GameMain.jsx`**: The primary interaction zone. It dynamically renders `NationCard` (for active roles) or `MiniNationCard` (for global overview) based on player permissions.
+- **`GameSidebar.jsx`**: Hosts the real-time **Communication Log** and high-level administrative controls like game resets.
+
+### Custom Hooks (`/frontend/src/hooks/`)
+
+- **`useTimer.js`**: An encapsulated hook that handles the high-precision mission clock, ensuring accurate play-time tracking across sessions.
 
 ### Global State Management (`/frontend/src/store/gameStore.js`)
 
 The _gameStore_ functions as a Memory Frontier and Socket Dispatcher:
 
 - **Intelligent Role Persistence**: Connects users to previous sessions role on crashes. The new Smart-Switch logic instantly purges out-of-date roles if a user deliberately shifts from one Operation lobby to another.
-- **WebHooks Event Handler**: Complex interactions like `updateFactoryDamage` or `transferFactory` are handled immutably and synced via background `socket.emit` dispatches, leaving the UI exceptionally clean.
+- **WebHooks Event Handler**: Complex interactions like `updateFactoryDamage` or `transferFactory` are handled immutably and synced via background `socket.emit` dispatches.
 
 ---
 
 ## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" width="24" height="24" align="center" /> Backend Server
 
-The core logic lies strictly within `server.js` and securely isolated inside `db.js`. It intentionally avoids ORMs to maximize concurrency performance on heavy WebSocket payload traffic using native SQL.
+The backend has been refactored into a **Modular Service Architecture**, isolating the database layer, API routes, and real-time socket logic.
 
-### `server.js` - Routing & Socket Handlers
+### Modular Architecture (`/backend/src/`)
 
-- **Unique Operation Identifiers**: Creates random JS Hex IDs directly mapping them to custom-created "Room Titles" in the database.
-- **Concurrency Mitigation (Smart Play-time)**: When all sockets disconnect, the script catches the departure `Date.now()`. Upon any subsequent `joinGame`, it safely restores the progression timer bypassing client-pollers and ensuring 100% time accuracy.
-- **Security Check**: Header limits enforced by `helmet` and phantom-session scraping contained on `/api/` endpoints via `express-rate-limit`.
+- **`server.js`**: The main entry point. It bootstraps the Express server and initializes the Socket.io orchestrator.
+- **`routes/`**: Handles traditional RestAPI endpoints (e.g., room discovery and deletion).
+- **`sockets/`**: Contains the full-duplex communication logic. Handlers are split by feature:
+  - `gameHandlers.js`: Manages room joining, turn advancement, and synchronization.
+  - `nationHandlers.js`: Processes economic updates, factory transfers, and structural damage.
+- **`models/`**: Domain-specific database queries (`gameModel`, `nationModel`, `logModel`) that directly interact with SQLite.
 
-### `db.js` - SQLite Sub-transactions
+### Data Layer (`/backend/src/database/`)
 
-- **Factory Status Evaluation**: SQLite logically executes structural `REPAIR`, accepting IPC withdrawals only if the asynchronous Bank verification evaluates as positive (`bank >= cost`).
-- **Dynamic Infrastructure Transfers**: Triggers macro-queries that shift entire `factories` JSON blocks from victim to conqueror, forcefully resetting temporary `repairedThisTurn` increments.
-- **Game Data Cleanup**: In the boot phase (`initDb`), it actively flushes empty or malformed rooms left hanging by fatal server stops.
+- **`connection.js`**: Manages the SQLite connection pool with **WAL (Write-Ahead Logging)** mode and busy timeouts for high-concurrency stability.
+- **`init.js`**: Handles table schema definitions and automated data cleanup (purging malformed sessions during boot).
 
-### `gameConfig.js` - Hard-coded Rules Isolation
+### Rules Isolation (`/backend/src/config/gameConfig.js`)
 
 All deterministic starting values for the _"Second Edition 1942"_ rulebook are strictly detached from runtime logic:
 
