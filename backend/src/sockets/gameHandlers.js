@@ -1,4 +1,4 @@
-const db = require('../../db');
+const db = require('../models');
 const { truncateString, broadcastGameState } = require('./utils');
 
 module.exports = (io, socket) => {

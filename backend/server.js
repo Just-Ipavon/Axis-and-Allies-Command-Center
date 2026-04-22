@@ -5,7 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const db = require('./db');
+const db = require('./src/models');
 
 const gameRoutes = require('./src/routes/gameRoutes');
 const socketInit = require('./src/sockets/index');

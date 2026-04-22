@@ -1,4 +1,4 @@
-import { cn } from '../utils/styles';
+import { cn } from '../../../utils/styles';
 
 export default function MiniNationCard({ nation }) {
   const colorClasses = {

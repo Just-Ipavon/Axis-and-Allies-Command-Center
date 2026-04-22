@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Shield, Clock, Lock, Trash2, X, PlusCircle } from 'lucide-react';
-import { useGameStore } from '../store/gameStore';
-import { cn } from '../utils/styles';
+import { useGameStore } from '../../../store/gameStore';
+import { cn } from '../../../utils/styles';
 
 export default function LobbyScreen() {
   const { setGameId, availableRooms, fetchRooms, connected, deleteRoom } = useGameStore();

@@ -1,4 +1,4 @@
-const db = require('../../db');
+const db = require('../models');
 
 const truncateString = (str, num) => {
     if (typeof str !== 'string') return '';

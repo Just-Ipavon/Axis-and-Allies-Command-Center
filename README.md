@@ -55,49 +55,40 @@ The frontend follows a **Feature-Based Architecture**, separating pages from UI 
 - **`LobbyPage.jsx`**: The isolated entryway. It fetches the available operations via RestAPI and supports the **Direct Connect** feature.
 - **`GamePage.jsx`**: The main command center. It orchestrates the game state and coordinates the various feature components.
 
-### Feature Components (`/frontend/src/features/game/components/`)
+### Feature Components (`/frontend/src/features/`)
 
-- **`GameHeader.jsx`**: Displays operational status, game code, sequence/turn order, and the mission timer.
-- **`GameMain.jsx`**: The primary interaction zone. It dynamically renders `NationCard` (for active roles) or `MiniNationCard` (for global overview) based on player permissions.
-- **`GameSidebar.jsx`**: Hosts the real-time **Communication Log** and high-level administrative controls like game resets.
+- **Lobby Components**:
+  - **`LobbyScreen.jsx`**: Manages room discovery, password challenges, and the creation of new operations.
+- **Game Components**:
+  - **`GameHeader.jsx`**: Displays operational status, game code, sequence/turn order, and the mission timer.
+  - **`GameMain.jsx`**: The primary interaction zone. It dynamically renders `NationCard` (for active roles) or `MiniNationCard` (for global overview).
+  - **`GameSidebar.jsx`**: Hosts the real-time **Communication Log** and high-level administrative controls.
 
 ### Custom Hooks (`/frontend/src/hooks/`)
 
 - **`useTimer.js`**: An encapsulated hook that handles the high-precision mission clock, ensuring accurate play-time tracking across sessions.
 
-### Global State Management (`/frontend/src/store/gameStore.js`)
-
-The _gameStore_ functions as a Memory Frontier and Socket Dispatcher:
-
-- **Intelligent Role Persistence**: Connects users to previous sessions role on crashes. The new Smart-Switch logic instantly purges out-of-date roles if a user deliberately shifts from one Operation lobby to another.
-- **WebHooks Event Handler**: Complex interactions like `updateFactoryDamage` or `transferFactory` are handled immutably and synced via background `socket.emit` dispatches.
-
 ---
 
 ## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" width="24" height="24" align="center" /> Backend Server
-
-The backend has been refactored into a **Modular Service Architecture**, isolating the database layer, API routes, and real-time socket logic.
 
 ### Modular Architecture (`/backend/src/`)
 
 - **`server.js`**: The main entry point. It bootstraps the Express server and initializes the Socket.io orchestrator.
 - **`routes/`**: Handles traditional RestAPI endpoints (e.g., room discovery and deletion).
-- **`sockets/`**: Contains the full-duplex communication logic. Handlers are split by feature:
-  - `gameHandlers.js`: Manages room joining, turn advancement, and synchronization.
-  - `nationHandlers.js`: Processes economic updates, factory transfers, and structural damage.
-- **`models/`**: Domain-specific database queries (`gameModel`, `nationModel`, `logModel`) that directly interact with SQLite.
+- **`sockets/`**: Contains the full-duplex communication logic. Handlers are split by feature (`gameHandlers.js`, `nationHandlers.js`).
+- **`models/`**: Centralized data access layer.
+  - **`index.js`**: The primary entry point that initializes the database and exports all models.
+  - **`gameModel.js`, `nationModel.js`, `logModel.js`**: Domain-specific query logic.
 
 ### Data Layer (`/backend/src/database/`)
 
-- **`connection.js`**: Manages the SQLite connection pool with **WAL (Write-Ahead Logging)** mode and busy timeouts for high-concurrency stability.
-- **`init.js`**: Handles table schema definitions and automated data cleanup (purging malformed sessions during boot).
+- **`connection.js`**: Manages the SQLite connection pool with **WAL (Write-Ahead Logging)** mode for high-concurrency stability.
+- **`init.js`**: Handles table schema definitions and automated data cleanup.
 
 ### Rules Isolation (`/backend/src/config/gameConfig.js`)
 
-All deterministic starting values for the _"Second Edition 1942"_ rulebook are strictly detached from runtime logic:
-
-- **Starting Incomes**: `USSR(24)`, `Germany(41)`, `UK(31)`, `Japan(30)`, `USA(42)`.
-- **Infrastructure Compliance**: Validated matching capacities across historically accurate zones.
+All deterministic starting values for the _"Second Edition 1942"_ rulebook are strictly detached from runtime logic, ensuring the engine remains agnostic of specific board-game balancing.
 
 ---
 

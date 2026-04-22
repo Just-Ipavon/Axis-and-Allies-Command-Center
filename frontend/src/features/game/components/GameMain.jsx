@@ -1,5 +1,5 @@
-import NationCard from '../../../components/NationCard';
-import MiniNationCard from '../../../components/MiniNationCard';
+import NationCard from './NationCard';
+import MiniNationCard from './MiniNationCard';
 import { TURN_ORDER } from '../../../constants/gameData';
 
 export default function GameMain({ role, nations }) {

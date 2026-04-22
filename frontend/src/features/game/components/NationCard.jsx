@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Lock, Unlock, Trash2, Swords, ShoppingCart, RotateCcw } from 'lucide-react';
-import { useGameStore } from '../store/gameStore';
-import { cn } from '../utils/styles';
-import { UNITS } from '../constants/gameData';
+import { useGameStore } from '../../../store/gameStore';
+import { cn } from '../../../utils/styles';
+import { UNITS } from '../../../constants/gameData';
 
 export default function NationCard({ nation, isEditable }) {
   const { updateNationBank, conquerTerritory, advanceTurn, collectIncome: collectIncomeStore, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases } = useGameStore();
