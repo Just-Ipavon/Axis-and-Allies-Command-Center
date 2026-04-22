@@ -46,7 +46,7 @@ The **Backend Server** plays a dual technical role: it provides WebSocket APIs w
 
 ---
 
-## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" width="24" height="24" valign="middle" /> Frontend
+<h2><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" width="24" height="24" style="vertical-align: middle;" /> Frontend</h2>
 
 The frontend follows a **Feature-Based Architecture**, separating pages from UI components and business logic.
 
@@ -70,7 +70,7 @@ The frontend follows a **Feature-Based Architecture**, separating pages from UI 
 
 ---
 
-## <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" width="24" height="24" valign="middle" /> Backend Server
+<h2><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" width="24" height="24" style="vertical-align: middle;" /> Backend Server</h2>
 
 ### Modular Architecture (`/backend/src/`)
 
