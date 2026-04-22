@@ -27,7 +27,14 @@ yarn-error.log*
 # Database (NEVER commit local game data)
 backend/game.db
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
+
+# Temporary & Scratch
+scratch/
+tests/package.json
+tests/node_modules/
 
 # IDEs
 .idea

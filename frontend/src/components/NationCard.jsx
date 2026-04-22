@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Lock, Unlock, Trash2, Swords, ShoppingCart, RotateCcw } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { cn } from '../utils/styles';
@@ -16,6 +16,24 @@ export default function NationCard({ nation, isEditable }) {
   const [adminEditMode, setAdminEditMode] = useState(false);
   const [transferFactoryData, setTransferFactoryData] = useState(null);
   const [transferVictim, setTransferVictim] = useState('');
+  
+  // Local states to prevent input lag
+  const [localPlayerName, setLocalPlayerName] = useState(nation.player_name || '');
+  const [localBank, setLocalBank] = useState(nation.bank);
+  const [localIncome, setLocalIncome] = useState(nation.income);
+
+  // Sync local states with prop updates from server
+  useEffect(() => {
+    setLocalPlayerName(nation.player_name || '');
+  }, [nation.player_name]);
+
+  useEffect(() => {
+    setLocalBank(nation.bank);
+  }, [nation.bank]);
+
+  useEffect(() => {
+    setLocalIncome(nation.income);
+  }, [nation.income]);
 
   const purchasesLocked = !!nation.purchases_locked;
   const currentPurchases = nation.purchases || {};
@@ -49,20 +67,43 @@ export default function NationCard({ nation, isEditable }) {
       updateNationBank(nation.name, nation.income, newBank, nation.purchases, nation.player_name, log);
   };
 
+  const handlePlayerNameChange = (e) => {
+      setLocalPlayerName(e.target.value);
+  };
+
+  const handlePlayerNameBlur = () => {
+      if (!isEditable) return;
+      if (localPlayerName !== nation.player_name) {
+          updateNationBank(nation.name, nation.income, nation.bank, nation.purchases, localPlayerName);
+      }
+  };
+
   const handleIncomeManualChange = (e) => {
-      if (!isEditable || (purchasesLocked && !isBanker)) return;
       let val = e.target.value;
-      if (val === '') val = 0;
-      else val = parseInt(val) || 0;
-      updateNationBank(nation.name, val, nation.bank, nation.purchases, nation.player_name);
+      if (val === '') setLocalIncome('');
+      else setLocalIncome(parseInt(val) || 0);
+  };
+
+  const handleIncomeManualBlur = () => {
+      if (!isEditable || (purchasesLocked && !isBanker)) return;
+      const finalVal = localIncome === '' ? 0 : localIncome;
+      if (finalVal !== nation.income) {
+          updateNationBank(nation.name, finalVal, nation.bank, nation.purchases, nation.player_name);
+      }
   };
 
   const handleBankManualChange = (e) => {
-      if (!isEditable || (purchasesLocked && !isBanker)) return;
       let val = e.target.value;
-      if (val === '') val = 0;
-      else val = parseInt(val) || 0;
-      updateNationBank(nation.name, nation.income, val, nation.purchases, nation.player_name);
+      if (val === '') setLocalBank('');
+      else setLocalBank(parseInt(val) || 0);
+  };
+
+  const handleBankManualBlur = () => {
+      if (!isEditable || (purchasesLocked && !isBanker)) return;
+      const finalVal = localBank === '' ? 0 : localBank;
+      if (finalVal !== nation.bank) {
+          updateNationBank(nation.name, nation.income, finalVal, nation.purchases, nation.player_name);
+      }
   };
 
   const factories = nation.factories || [];
@@ -133,11 +174,6 @@ export default function NationCard({ nation, isEditable }) {
        collectIncomeStore(nation.name, log);
    };
 
-  const handlePlayerNameChange = (e) => {
-      if (!isEditable) return;
-      updateNationBank(nation.name, nation.income, nation.bank, nation.purchases, e.target.value);
-  };
-
   const colorClasses = {
       'USSR': 'bg-faction-ussr text-white border-vintage-text',
       'Germany': 'bg-faction-germany text-white border-vintage-text',
@@ -155,8 +191,10 @@ export default function NationCard({ nation, isEditable }) {
              <input 
                  type="text" 
                  placeholder="Player Name" 
-                 value={nation.player_name || ''} 
+                 value={localPlayerName} 
                  onChange={handlePlayerNameChange}
+                 onBlur={handlePlayerNameBlur}
+                 onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
                  className="bg-black/20 text-sm p-1 outline-none w-32 border-b border-dashed border-current focus:bg-black/30 placeholder-current/50" 
              />
            ) : (
@@ -173,8 +211,10 @@ export default function NationCard({ nation, isEditable }) {
              <input 
                  type="number" 
                  className="text-3xl font-display w-24 bg-transparent outline-none text-right border-b border-dashed border-red-500 focus:bg-black/10" 
-                 value={nation.bank} 
+                 value={localBank} 
                  onChange={handleBankManualChange} 
+                 onBlur={handleBankManualBlur}
+                 onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
              />
           ) : (
              <div className="text-3xl font-display">{nation.bank}</div>
@@ -190,8 +230,10 @@ export default function NationCard({ nation, isEditable }) {
                <input 
                    type="number" 
                    className="text-xl font-bold w-16 bg-transparent outline-none border-b border-dashed border-red-500 focus:bg-black/10" 
-                   value={nation.income} 
+                   value={localIncome} 
                    onChange={handleIncomeManualChange} 
+                   onBlur={handleIncomeManualBlur}
+                   onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
                />
             ) : (
                <div className="text-xl font-bold">{nation.income}</div>

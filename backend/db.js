@@ -9,6 +9,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
         console.error('Error opening database', err.message);
     } else {
         console.log('Connected to the SQLite database.');
+        
+        // Optimizations for high concurrency
+        db.configure("busyTimeout", 10000); // Wait up to 10s if DB is locked
+        db.run('PRAGMA journal_mode = WAL', (err) => {
+            if (err) console.error('Error setting WAL mode:', err.message);
+            else console.log('SQLite WAL mode enabled.');
+        });
+
         initDb();
     }
 });

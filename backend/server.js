@@ -11,6 +11,7 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false, // Often requires config for React, disabling for now to prevent breaking changes unless configured
 }));
+app.set('trust proxy', true); // Trust reverse proxy (Cloudflare, Nginx, etc.)
 app.use(cors());
 app.use(express.json({ limit: '50kb' }));
 
@@ -111,85 +112,96 @@ io.on('connection', (socket) => {
 
     // Join a game room
     socket.on('joinGame', async (data, callback) => {
-        if (!data) return;
-        let gameId = typeof data === 'string' ? data : data.gameId;
-        gameId = truncateString(gameId, 50);
-        let password = data.password || "";
-        password = truncateString(password, 50);
-        const isCreating = data.isCreating || false;
+        try {
+            if (!data) return;
+            let gameId = typeof data === 'string' ? data : data.gameId;
+            gameId = truncateString(gameId, 50);
+            let password = data.password || "";
+            password = truncateString(password, 50);
+            const isCreating = data.isCreating || false;
 
-        let masterPassword = data.masterPassword || "";
-        masterPassword = truncateString(masterPassword, 50);
+            let masterPassword = data.masterPassword || "";
+            masterPassword = truncateString(masterPassword, 50);
 
-        if (!gameId) return;
+            if (!gameId) return;
 
-        let game = await db.getGame(gameId);
-        
-        if (!game) {
-            if (!isCreating) {
-                if (typeof callback === 'function') callback({ error: 'Room not found.' });
-                return;
+            let game = await db.getGame(gameId);
+            
+            if (!game) {
+                if (!isCreating) {
+                    if (typeof callback === 'function') callback({ error: 'Room not found.' });
+                    return;
+                }
+                
+                // Check if room name already exists
+                const roomName = data.roomName || 'Unknown Operation';
+                const existingByName = await db.getGameByRoomName(roomName);
+                if (existingByName) {
+                    if (typeof callback === 'function') callback({ error: 'A room with this name already exists.' });
+                    return;
+                }
+
+                console.log(`Game ${gameId} not found, initializing...`);
+                await db.createOrResetGame(gameId, password, masterPassword, roomName);
+            } else {
+                if (isCreating) {
+                    if (typeof callback === 'function') callback({ error: 'Room already exists.' });
+                    return;
+                }
+                try {
+                    await db.verifyRoomPassword(gameId, password);
+                } catch (err) {
+                    if (typeof callback === 'function') callback({ error: 'Invalid password.' });
+                    return;
+                }
             }
             
-            // Check if room name already exists
-            const roomName = data.roomName || 'Unknown Operation';
-            const existingByName = await db.getGameByRoomName(roomName);
-            if (existingByName) {
-                if (typeof callback === 'function') callback({ error: 'A room with this name already exists.' });
+            if (socket.gameId && socket.gameId !== gameId) {
+                await handleLeave(socket.gameId);
+            }
+
+            socket.join(gameId);
+            socket.gameId = gameId;
+            // console.log(`Socket ${socket.id} joined game ${gameId}`);
+            
+            game = await db.getGame(gameId); // re-fetch to get newest info
+            if (!game) {
+                if (typeof callback === 'function') callback({ error: 'Server synchronization error. Please try again.' });
                 return;
             }
 
-            console.log(`Game ${gameId} not found, initializing...`);
-            await db.createOrResetGame(gameId, password, masterPassword, roomName);
-        } else {
-            if (isCreating) {
-                if (typeof callback === 'function') callback({ error: 'Room already exists.' });
-                return;
+            const roomSize = io.sockets.adapter.rooms.get(gameId)?.size || 1;
+            
+            if (roomSize === 1 && game.last_empty_at !== null) {
+                let newPlayTime = game.play_time || 0;
+                const emptyDur = Date.now() - game.last_empty_at;
+                if (emptyDur < 3600000) { // < 1 hour
+                    newPlayTime += Math.floor(emptyDur / 1000);
+                }
+                await db.updateGameTime(gameId, newPlayTime, Date.now(), null);
+            } else if (roomSize === 1 && game.last_resume_at === null) {
+                await db.updateGameTime(gameId, game.play_time || 0, Date.now(), null);
             }
-            try {
-                await db.verifyRoomPassword(gameId, password);
-            } catch (err) {
-                if (typeof callback === 'function') callback({ error: 'Invalid password.' });
-                return;
-            }
-        }
-        
-        if (socket.gameId && socket.gameId !== gameId) {
-            await handleLeave(socket.gameId);
-        }
 
-        socket.join(gameId);
-        socket.gameId = gameId;
-        console.log(`Socket ${socket.id} joined game ${gameId}`);
-        
-        game = await db.getGame(gameId); // re-fetch to get newest info
-        const roomSize = io.sockets.adapter.rooms.get(gameId)?.size || 1;
-        
-        if (roomSize === 1 && game.last_empty_at !== null) {
-            let newPlayTime = game.play_time || 0;
-            const emptyDur = Date.now() - game.last_empty_at;
-            if (emptyDur < 3600000) { // < 1 hour
-                newPlayTime += Math.floor(emptyDur / 1000);
-            }
-            await db.updateGameTime(gameId, newPlayTime, Date.now(), null);
-        } else if (roomSize === 1 && game.last_resume_at === null) {
-            await db.updateGameTime(gameId, game.play_time || 0, Date.now(), null);
+            await broadcastGameState(gameId);
+            if (typeof callback === 'function') callback({ success: true });
+        } catch (err) {
+            console.error('CRITICAL: joinGame error:', err);
+            if (typeof callback === 'function') callback({ error: 'Internal Server Error. Please contact command.' });
         }
-
-        await broadcastGameState(gameId);
-        if (typeof callback === 'function') callback({ success: true });
     });
 
     // Handle updates to nation's income, bank or player name
     socket.on('updateNation', async ({ gameId, name, income, bank, purchases, playerName, logMessage }) => {
         try {
-            await db.updateNationStatus(truncateString(gameId, 50), truncateString(name, 50), income, bank, purchases, truncateString(playerName, 50));
+            const cleanGameId = truncateString(gameId, 50);
+            await db.updateNationStatus(cleanGameId, truncateString(name, 50), income, bank, purchases, truncateString(playerName, 50));
             if (logMessage) {
-                await db.addLog(truncateString(gameId, 50), truncateString(logMessage, 200));
+                await db.addLog(cleanGameId, truncateString(logMessage, 500));
             }
-            await broadcastGameState(truncateString(gameId, 50));
-        } catch (err) {
-            console.error('Error updating nation:', err);
+            await broadcastGameState(cleanGameId);
+        } catch (e) {
+            console.error('updateNation error:', e);
         }
     });
 
@@ -214,7 +226,9 @@ io.on('connection', (socket) => {
             const cleanGameId = truncateString(gameId, 50);
             await db.advanceTurn(cleanGameId);
             await broadcastGameState(cleanGameId);
-        } catch(e) { console.error(e) }
+        } catch (e) {
+            console.error('advanceTurn error:', e);
+        }
     });
 
     socket.on('collectIncome', async ({ gameId, name, logMessage }) => {
@@ -222,7 +236,9 @@ io.on('connection', (socket) => {
             const cleanGameId = truncateString(gameId, 50);
             await db.collectIncome(cleanGameId, truncateString(name, 50), truncateString(logMessage, 500));
             await broadcastGameState(cleanGameId);
-        } catch(e) { console.error(e) }
+        } catch (e) {
+            console.error('collectIncome error:', e);
+        }
     });
 
     // Undo turn
@@ -231,7 +247,9 @@ io.on('connection', (socket) => {
             const cleanGameId = truncateString(gameId, 50);
             await db.undoTurn(cleanGameId);
             await broadcastGameState(cleanGameId);
-        } catch(e) { console.error(e) }
+        } catch (e) {
+            console.error('undoTurn error:', e);
+        }
     });
 
     // Conquer Territory
