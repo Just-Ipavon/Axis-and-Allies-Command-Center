@@ -48,6 +48,7 @@ const initDb = () => {
         db.run("ALTER TABLE nations ADD COLUMN player_name TEXT", (err) => {});
         db.run("ALTER TABLE nations ADD COLUMN factories TEXT", (err) => {});
         db.run("ALTER TABLE nations ADD COLUMN purchases_locked INTEGER DEFAULT 0", (err) => {});
+        db.run("ALTER TABLE nations ADD COLUMN last_purchases TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN password TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN master_password TEXT", (err) => {});
         db.run("ALTER TABLE games ADD COLUMN play_time INTEGER DEFAULT 0", (err) => {});
@@ -158,6 +159,54 @@ const updateGameTime = (gameId, playTime, lastResumeAt, lastEmptyAt) => {
                 resolve(true);
             }
         );
+    });
+};
+
+const collectIncome = (gameId, name, logMessage) => {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT current_turn FROM games WHERE id = ?', [gameId], (err, game) => {
+            if (err || !game) return reject(err || new Error('Game not found'));
+            
+            db.get('SELECT bank, income, purchases, player_name FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
+                if (err || !nation) return reject(err || new Error('Nation not found'));
+
+                const currIdx = TURN_ORDER.indexOf(game.current_turn) || 0;
+                const nextTurn = TURN_ORDER[(currIdx + 1) % TURN_ORDER.length];
+
+                db.serialize(() => {
+                    // 1. Update Game Turn
+                    db.run('UPDATE games SET current_turn = ? WHERE id = ?', [nextTurn, gameId]);
+
+                    // 2. Update Nation Bank & Save Purchases to last_purchases
+                    db.run(
+                        'UPDATE nations SET bank = bank + ?, last_purchases = purchases, purchases = ?, purchases_locked = 0 WHERE game_id = ? AND name = ?',
+                        [nation.income, JSON.stringify({}), gameId, name]
+                    );
+
+                    // 3. Log
+                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, logMessage]);
+
+                    // 4. Global maintenance (reset factory repairs etc)
+                    db.all('SELECT name, factories FROM nations WHERE game_id = ?', [gameId], (err, rows) => {
+                        if (err) return resolve(nextTurn);
+                        const stmt = db.prepare('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?');
+                        rows.forEach(row => {
+                            try {
+                                const f = JSON.parse(row.factories || '[]');
+                                f.forEach(fact => { fact.repairedThisTurn = 0; });
+                                stmt.run([JSON.stringify(f), gameId, row.name]);
+                            } catch(e) {}
+                        });
+                        stmt.finalize();
+
+                        // Force unlock all (redundant but safe)
+                        db.run('UPDATE nations SET purchases_locked = 0 WHERE game_id = ?', [gameId], () => {
+                            resolve(nextTurn);
+                        });
+                    });
+                });
+            });
+        });
     });
 };
 
@@ -418,12 +467,16 @@ const undoTurn = (gameId) => {
             db.run('UPDATE games SET current_turn = ? WHERE id = ?', [prevTurn, gameId], (err) => {
                 if (err) return reject(err);
                 
-                db.get('SELECT bank, income FROM nations WHERE game_id = ? AND name = ?', [gameId, prevTurn], (err, row) => {
+                db.get('SELECT bank, income, last_purchases FROM nations WHERE game_id = ? AND name = ?', [gameId, prevTurn], (err, row) => {
                     if (err || !row) return resolve(prevTurn);
                     const newBank = Math.max(0, row.bank - row.income);
+                    const restoredPurchases = row.last_purchases || JSON.stringify({});
                     
                     db.serialize(() => {
-                        db.run('UPDATE nations SET bank = ?, purchases_locked = 0 WHERE game_id = ? AND name = ?', [newBank, gameId, prevTurn]);
+                        db.run(
+                            'UPDATE nations SET bank = ?, purchases = ?, last_purchases = NULL, purchases_locked = 0 WHERE game_id = ? AND name = ?', 
+                            [newBank, restoredPurchases, gameId, prevTurn]
+                        );
                         
                         // Delete the most recent 'collects income' log for this nation
                         db.run(`DELETE FROM logs WHERE id IN (
@@ -433,7 +486,7 @@ const undoTurn = (gameId) => {
                         )`, [gameId, `${prevTurn} collects income%`]);
                         
                         db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                           [gameId, `The Banker has undone the turn. Cancelled the collection of +${row.income} IPC for ${prevTurn}.`], 
+                           [gameId, `The Banker has undone the turn. Reverted +${row.income} IPC and restored mobilization cart for ${prevTurn}.`], 
                            () => resolve(prevTurn)
                         );
                     });
@@ -498,6 +551,7 @@ module.exports = {
     verifyRoomPassword,
     updateGameTime,
     undoTurn,
+    collectIncome,
     lockPurchases,
     unlockPurchases
 };

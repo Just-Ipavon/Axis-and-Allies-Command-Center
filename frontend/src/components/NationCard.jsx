@@ -5,7 +5,7 @@ import { cn } from '../utils/styles';
 import { UNITS } from '../constants/gameData';
 
 export default function NationCard({ nation, isEditable }) {
-  const { updateNationBank, conquerTerritory, advanceTurn, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases } = useGameStore();
+  const { updateNationBank, conquerTerritory, advanceTurn, collectIncome: collectIncomeStore, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
   const canCollect = isEditable && isMyTurn;
@@ -129,12 +129,8 @@ export default function NationCard({ nation, isEditable }) {
            }
        }
        
-       // Generic log as requested: "Units mobilized and X IPC collected"
        const log = `${nation.name} collects income (${nation.income} IPC). Units mobilized and funds secured.`;
-       
-       // Also clear purchases for the new turn
-       updateNationBank(nation.name, nation.income, nation.bank + nation.income, {}, nation.player_name, log);
-       advanceTurn();
+       collectIncomeStore(nation.name, log);
    };
 
   const handlePlayerNameChange = (e) => {

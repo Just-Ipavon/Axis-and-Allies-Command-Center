@@ -217,6 +217,14 @@ io.on('connection', (socket) => {
         } catch(e) { console.error(e) }
     });
 
+    socket.on('collectIncome', async ({ gameId, name, logMessage }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.collectIncome(cleanGameId, truncateString(name, 50), truncateString(logMessage, 500));
+            await broadcastGameState(cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+
     // Undo turn
     socket.on('undoTurn', async (gameId) => {
         try {

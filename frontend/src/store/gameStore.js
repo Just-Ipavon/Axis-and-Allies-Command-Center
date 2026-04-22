@@ -130,6 +130,12 @@ export const useGameStore = create((set, get) => ({
         socket.emit('advanceTurn', gameId);
     },
 
+    collectIncome: (name, logMessage) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        socket.emit('collectIncome', { gameId, name, logMessage });
+    },
+
     addFactory: (name, territoryName, capacity) => {
         const { gameId } = get();
         if(!gameId) return;
