@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Lock, Unlock, Trash2, Swords, ShoppingCart, RotateCcw } from 'lucide-react';
+import { Lock, Unlock, Trash2, Swords, ShoppingCart, RotateCcw, Flag } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { cn } from '../../../utils/styles';
 import { UNITS } from '../../../constants/gameData';
@@ -25,6 +25,8 @@ export default function NationCard({ nation, isEditable }) {
   const [adminEditMode, setAdminEditMode] = useState(false);
   const [transferFactoryData, setTransferFactoryData] = useState(null);
   const [transferVictim, setTransferVictim] = useState('');
+  const [bombingRaidData, setBombingRaidData] = useState(null);
+  const [bombingRaidValue, setBombingRaidValue] = useState(0);
   
   // Local states to prevent input lag
   const [localPlayerName, setLocalPlayerName] = useState(nation.player_name || '');
@@ -120,7 +122,7 @@ export default function NationCard({ nation, isEditable }) {
 
   let totalPurchased = 0;
   Object.entries(currentPurchases).forEach(([unit, qty]) => {
-      if (unit !== 'Industrial Complex') totalPurchased += qty;
+      if (unit !== 'Industrial Complex' && !unit.startsWith('repair_')) totalPurchased += qty;
   });
 
   const handlePurchase = (unit, dQty) => {
@@ -153,6 +155,29 @@ export default function NationCard({ nation, isEditable }) {
       updateNationBank(nation.name, nation.income, newBank, newPurchases, nation.player_name);
   };
 
+  const handleRepairQueue = (factoryId, dQty) => {
+      if (!isEditable || (purchasesLocked && !isBanker)) return;
+      const key = `repair_${factoryId}`;
+      const currentQty = currentPurchases[key] || 0;
+      const newQty = currentQty + dQty;
+
+      if (newQty < 0) return;
+      
+      const factory = factories.find(f => f.id === factoryId);
+      if (!factory) return;
+      if (newQty > factory.damage) return; // can't repair more than the damage it has
+
+      const costDiff = 1 * dQty; // 1 IPC per damage point
+      if (nation.bank - costDiff < 0) return alert("Not enough IPCs in Bank!"); 
+
+      const newBank = nation.bank - costDiff;
+      const newPurchases = { ...currentPurchases, [key]: newQty };
+
+      updateNationBank(nation.name, nation.income, newBank, newPurchases, nation.player_name);
+  };
+
+
+
   const handleConquer = () => {
       if (!battleVictim) return alert("Select a target nation");
       conquerTerritory(nation.name, battleVictim, battleValue, battleTargetType);
@@ -162,8 +187,14 @@ export default function NationCard({ nation, isEditable }) {
   const handleConfirmCart = () => {
       if (!isEditable || purchasesLocked) return;
       const items = Object.entries(nation.purchases || {})
-          .filter(([_, qty]) => qty > 0)
-          .map(([unit, qty]) => `${qty}x ${unit}`)
+          .filter(([key, qty]) => qty > 0)
+          .map(([key, qty]) => {
+              if (key.startsWith('repair_')) {
+                  const fName = factories.find(f => f.id === key.split('_')[1])?.name || 'Factory';
+                  return `${qty}x Repair in ${fName}`;
+              }
+              return `${qty}x ${key}`;
+          })
           .join(', ');
       
       const log = `${nation.name} confirms purchases: ${items}`;
@@ -195,7 +226,7 @@ export default function NationCard({ nation, isEditable }) {
     <div className={cn("p-4 border-2 shadow-[4px_4px_0_0_rgba(43,42,38,1)] flex flex-col gap-4", colorClasses)}>
       <div className="flex justify-between items-center border-b-2 tracking-widest border-current pb-2">
         <div>
-         <h2 className="text-2xl flex items-center gap-2">
+         <h2 className="text-2xl flex items-center gap-2 mb-2">
             {FLAG_MAP[nation.name] && <img src={FLAG_MAP[nation.name]} alt={nation.name} className="w-8 h-8 rounded-full border border-black/30" />}
             {nation.name}
          </h2>
@@ -291,29 +322,42 @@ export default function NationCard({ nation, isEditable }) {
              {Object.keys(UNITS).map(unit => {
                  const qty = (nation.purchases && nation.purchases[unit]) || 0;
                  return (
-                     <div key={unit} className="flex justify-between items-center bg-black/10 py-1.5 px-2">
-                         <div className="pr-1 flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                             <div className="flex items-center gap-2">
-                                <UnitIconResolver unitName={unit} size={32} className="text-current" />
-                                <span className="leading-tight">{unit}</span>
-                             </div>
-                             <div className="flex gap-2 items-center">
-                                <span className="opacity-50 text-[10px] font-bold">A{UNITS[unit].a} D{UNITS[unit].d} M{UNITS[unit].m}</span>
-                                <span className="opacity-80 text-xs font-bold text-amber-500/80">IPC {UNITS[unit].cost}</span>
+                     <div key={unit} className="flex justify-between items-center bg-black/10 py-1.5 px-2 gap-2">
+                         <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                             <UnitIconResolver unitName={unit} size={26} className="text-current shrink-0" />
+                             <div className="flex items-baseline gap-1.5 flex-wrap sm:flex-nowrap">
+                                <span className="leading-tight whitespace-nowrap font-medium text-[13px]">{unit}</span>
+                                <div className="flex gap-1.5 items-baseline">
+                                   <span className="opacity-50 text-[9px] font-bold whitespace-nowrap">A{UNITS[unit].a} D{UNITS[unit].d} M{UNITS[unit].m}</span>
+                                   <span className="opacity-80 text-[11px] font-bold text-amber-500/80 whitespace-nowrap">IPC {UNITS[unit].cost}</span>
+                                </div>
                              </div>
                          </div>
                          {isEditable ? (
-                         <div className="flex items-center gap-1">
+                         <div className="flex items-center gap-1 shrink-0">
                             <span className="opacity-70 text-xs w-2 text-right">{qty > 0 ? qty : ''}</span>
-                            <button onClick={() => handlePurchase(unit, -1)} className="bg-black/30 h-6 w-6 flex items-center justify-center hover:bg-black/50 active:scale-95">-</button>
-                            <button onClick={() => handlePurchase(unit, 1)} className="bg-white/30 text-black h-6 w-6 flex items-center justify-center hover:bg-white/50 active:scale-95">+</button>
+                            <button onClick={() => handlePurchase(unit, -1)} className="bg-black/30 h-6 w-6 flex items-center justify-center hover:bg-black/50 active:scale-95 shrink-0">-</button>
+                            <button onClick={() => handlePurchase(unit, 1)} className="bg-white/30 text-black h-6 w-6 flex items-center justify-center hover:bg-white/50 active:scale-95 shrink-0">+</button>
                          </div>
                          ) : (
-                             <div className="font-bold">{qty > 0 ? `x${qty}` : ''}</div>
+                             <div className="font-bold shrink-0">{qty > 0 ? `x${qty}` : ''}</div>
                          )}
                      </div>
                  )
              })}
+             
+             {(() => {
+                 const totalPendingRepairCost = Object.entries(currentPurchases).reduce((sum, [k, qty]) => k.startsWith('repair_') ? sum + qty : sum, 0);
+                 if (totalPendingRepairCost > 0) {
+                     return (
+                         <div className="flex justify-between items-center bg-green-900/30 border border-green-500/30 py-1.5 px-2 mt-1">
+                             <span className="text-[11px] font-bold text-green-400 uppercase tracking-wider">Pending Repairs</span>
+                             <span className="text-xs font-bold text-amber-500/80">IPC {totalPendingRepairCost}</span>
+                         </div>
+                     );
+                 }
+                 return null;
+             })()}
           </div>
       </div>
 
@@ -348,44 +392,105 @@ export default function NationCard({ nation, isEditable }) {
                </div>
            )}
 
-           <div className="flex flex-col gap-1 text-sm max-h-[120px] overflow-y-auto">
-               {factories.map(f => (
-                   <div key={f.id} className="flex justify-between items-center bg-black/20 p-1 px-2 text-xs border border-current shadow-[2px_2px_0_0_rgba(0,0,0,0.5)]">
-                       <div className="flex flex-col">
-                           <span className="font-bold">{f.name} (Cap {f.capacity})</span>
-                           <span className="opacity-60 text-[10px]">Max Dmg: {f.capacity * 2}</span>
-                       </div>
-                       <div className="flex items-center gap-1">
-                           {adminEditMode ? (
-                               <input 
-                                   type="number" 
-                                   className="w-12 bg-black/40 border border-amber-500 text-amber-500 font-bold px-1 text-center outline-none"
-                                   value={f.damage}
-                                   onChange={(e) => {
-                                       const newVal = parseInt(e.target.value) || 0;
-                                       const delta = newVal - f.damage;
-                                       updateFactoryDamage(nation.name, f.id, delta, false, true); 
-                                   }}
-                               />
-                           ) : (
-                               <div className={cn("font-bold px-1.5 border min-w-[36px] text-center", f.damage > 0 ? "bg-red-800 text-white border-red-900" : "bg-black/20 border-current opacity-80")}>
-                                   Dmg: {f.damage}
-                               </div>
-                           )}
-
-                           {isEditable && (
-                               <div className="flex gap-1 ml-1">
-                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, 1)} title="Bombing Raid (+1 Damage)" className="w-6 h-5 bg-red-900 text-white flex justify-center items-center font-bold hover:bg-red-700 active:scale-95">+</button>
-                                    <button onClick={() => updateFactoryDamage(nation.name, f.id, -1)} title="Repair (-1 Damage, Costs 1 IPC)" className="w-6 h-5 bg-green-700 text-white flex justify-center items-center font-bold hover:bg-green-600 active:scale-95">-</button>
-                                    <button onClick={() => setTransferFactoryData({ id: f.id, name: f.name, capacity: f.capacity })} title="Transfer Factory" className="w-6 h-5 bg-blue-800 text-white flex justify-center items-center hover:bg-blue-700 active:scale-95 text-[10px]">🔄</button>
-                                    <button onClick={() => { if(window.confirm(`Discard ${f.name} factory?`)) removeFactory(nation.name, f.id); }} className="w-6 h-5 bg-black/80 text-white flex justify-center items-center hover:bg-red-800 active:scale-95"><Trash2 size={10} /></button>
-                               </div>
-                           )}
-                       </div>
+           {isEditable && bombingRaidData && (
+               <div className="absolute top-8 left-0 text-sm bg-[#4a1a1a] text-[#f4ecd8] border-2 border-red-500 shadow-xl p-3 z-50 w-full min-w-[240px] max-w-[280px]">
+                   <div className="font-bold mb-2 uppercase text-xs flex items-center gap-2">
+                       <span className="text-xl">💣</span> Bombing Raid: {bombingRaidData.name}
                    </div>
-               ))}
-               {factories.length === 0 && <div className="italic opacity-60 text-xs text-center border-t border-b border-dashed border-current py-1 my-1">No production sites.</div>}
-       </div>
+                   <div className="text-[10px] opacity-80 mb-3 uppercase">Current Damage: {bombingRaidData.currentDamage} / {bombingRaidData.maxDamage}</div>
+                   
+                   <div className="flex flex-col gap-2">
+                       <label className="text-[10px] font-bold uppercase opacity-70">Total Damage to Apply:</label>
+                       <div className="flex items-center gap-2">
+                           <button onClick={() => setBombingRaidValue(Math.max(0, bombingRaidValue - 1))} className="w-10 h-10 bg-black/40 border border-white/20 flex items-center justify-center text-xl hover:bg-black/60">-</button>
+                           <input 
+                               type="number" 
+                               value={bombingRaidValue}
+                               onChange={(e) => setBombingRaidValue(Math.max(0, parseInt(e.target.value) || 0))}
+                               className="flex-1 h-10 bg-black/60 border border-red-500 text-white text-center font-bold text-lg outline-none"
+                           />
+                           <button onClick={() => setBombingRaidValue(Math.min(bombingRaidData.maxDamage - bombingRaidData.currentDamage, bombingRaidValue + 1))} className="w-10 h-10 bg-black/40 border border-white/20 flex items-center justify-center text-xl hover:bg-black/60">+</button>
+                       </div>
+                       <div className="text-[9px] italic opacity-60 mt-1">Note: Total damage cannot exceed Max Damage ({bombingRaidData.maxDamage}).</div>
+                   </div>
+
+                   <div className="flex gap-2 mt-4">
+                       <button onClick={() => {
+                           const limitedValue = Math.min(bombingRaidValue, bombingRaidData.maxDamage - bombingRaidData.currentDamage);
+                           if (limitedValue > 0) {
+                               updateFactoryDamage(nation.name, bombingRaidData.id, limitedValue);
+                           }
+                           setBombingRaidData(null);
+                           setBombingRaidValue(0);
+                       }} className="flex-1 bg-red-800 text-white shadow-sm border border-black font-bold py-2 uppercase hover:bg-red-700 active:scale-95">Apply Damage</button>
+                       <button onClick={() => {setBombingRaidData(null); setBombingRaidValue(0);}} className="flex-1 bg-gray-800 border text-white shadow-sm border-black font-bold py-2 uppercase hover:bg-gray-700 active:scale-95">Cancel</button>
+                   </div>
+               </div>
+           )}
+
+            <div className="flex flex-col gap-0.5 text-sm max-h-[140px] overflow-y-auto pr-0.5">
+                {factories.map(f => (
+                    <div key={f.id} className="flex justify-between items-center bg-black/20 py-1 px-2 border border-white/5 shadow-sm">
+                        <div className="flex flex-col leading-tight min-w-0">
+                            <span className="font-bold text-[11px] truncate">{f.name}</span>
+                            <div className="flex gap-2 items-center opacity-60 text-[9px] uppercase font-bold tracking-tighter">
+                                <span>Cap {f.capacity}</span>
+                                <span className="w-1 h-1 bg-current rounded-full opacity-20"></span>
+                                <span>Max Dmg {f.capacity * 2}</span>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 shrink-0 ml-auto">
+                            {adminEditMode ? (
+                                <input 
+                                    type="number" 
+                                    className="w-10 h-5 bg-black/40 border border-amber-500 text-amber-500 font-bold px-1 text-center outline-none text-[10px]"
+                                    value={f.damage}
+                                    onChange={(e) => {
+                                        const newVal = parseInt(e.target.value) || 0;
+                                        const delta = newVal - f.damage;
+                                        updateFactoryDamage(nation.name, f.id, delta, false, true); 
+                                    }}
+                                />
+                            ) : (
+                                <div className={cn("font-black px-1.5 py-0.5 border text-[10px] min-w-[24px] text-center rounded-sm tracking-tighter", f.damage > 0 ? "bg-red-900/80 text-white border-red-500/50" : "bg-black/40 border-white/10 opacity-40")}>
+                                    {f.damage > 0 ? `DMG ${f.damage}` : 'OK'}
+                                </div>
+                            )}
+ 
+                            {isEditable && (
+                                <div className="flex gap-1 items-center border-l border-white/10 pl-1.5 ml-1">
+                                    <button 
+                                        onClick={() => {
+                                            setBombingRaidData({ id: f.id, name: f.name, currentDamage: f.damage, maxDamage: f.capacity * 2 });
+                                            setBombingRaidValue(1);
+                                        }} 
+                                        title="Bombing Raid" 
+                                        className="w-5 h-5 rounded-sm bg-red-950 text-white flex justify-center items-center hover:bg-red-800 active:scale-95 text-[10px] border border-red-500/30"
+                                    >💣</button>
+                                    
+                                    <button onClick={() => setTransferFactoryData({ id: f.id, name: f.name, capacity: f.capacity })} title="Transfer" className="w-5 h-5 rounded-sm bg-blue-900 text-white flex justify-center items-center hover:bg-blue-700 active:scale-95 text-[10px] border border-blue-500/30">
+                                        <Flag size={11} />
+                                    </button>
+                                    
+                                    <button onClick={() => { if(window.confirm(`Discard ${f.name}?`)) removeFactory(nation.name, f.id); }} className="w-5 h-5 rounded-sm bg-zinc-900 text-white flex justify-center items-center hover:bg-red-900 active:scale-95 border border-white/10">
+                                        <Trash2 size={10} />
+                                    </button>
+
+                                    {(!purchasesLocked || isBanker) && f.damage > 0 && (
+                                        <div className="flex items-center gap-0.5 bg-green-950/40 px-1 py-0.5 border border-green-500/30 rounded-sm ml-1">
+                                            <button onClick={() => handleRepairQueue(f.id, -1)} className="w-4 h-4 bg-black/40 text-white flex justify-center items-center hover:bg-black/60 active:scale-95 text-[10px]">-</button>
+                                            <span className="text-[10px] font-black w-3 text-center text-green-400">{currentPurchases[`repair_${f.id}`] || 0}</span>
+                                            <button onClick={() => handleRepairQueue(f.id, 1)} className="w-4 h-4 bg-white/10 text-white flex justify-center items-center hover:bg-white/20 active:scale-95 text-[10px]">+</button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+                {factories.length === 0 && <div className="italic opacity-60 text-xs text-center border-t border-b border-dashed border-current py-1 my-1">No production sites.</div>}
+        </div>
       </div>
 
       {isEditable && (

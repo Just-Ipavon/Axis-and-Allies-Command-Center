@@ -305,16 +305,47 @@ const undoTurn = (gameId) => {
 
 const lockPurchases = (gameId, name, logMessage) => {
     return new Promise((resolve, reject) => {
-        db.run('UPDATE nations SET purchases_locked = 1 WHERE game_id = ? AND name = ?', [gameId, name], (err) => {
+        db.get('SELECT purchases, factories FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
             if (err) return reject(err);
-            if (logMessage) {
-                db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, logMessage], (err2) => {
-                    if (err2) reject(err2);
-                    else resolve(true);
-                });
-            } else {
-                resolve(true);
-            }
+            if (!row) return resolve(true);
+
+            let purchases = {};
+            let factories = [];
+            try { purchases = JSON.parse(row.purchases || '{}'); } catch(e){}
+            try { factories = JSON.parse(row.factories || '[]'); } catch(e){}
+
+            let modifiedFactories = false;
+            let finalPurchases = {};
+
+            Object.entries(purchases).forEach(([key, qty]) => {
+                if (key.startsWith('repair_')) {
+                    const factoryId = key.split('_')[1];
+                    const factory = factories.find(f => f.id === factoryId);
+                    if (factory && qty > 0) {
+                        factory.damage = Math.max(0, factory.damage - qty);
+                        modifiedFactories = true;
+                    }
+                } else {
+                    finalPurchases[key] = qty;
+                }
+            });
+
+            db.serialize(() => {
+                if (modifiedFactories) {
+                    db.run('UPDATE nations SET purchases_locked = 1, factories = ?, purchases = ? WHERE game_id = ? AND name = ?', [JSON.stringify(factories), JSON.stringify(finalPurchases), gameId, name]);
+                } else {
+                    db.run('UPDATE nations SET purchases_locked = 1 WHERE game_id = ? AND name = ?', [gameId, name]);
+                }
+
+                if (logMessage) {
+                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, logMessage], (err2) => {
+                        if (err2) reject(err2);
+                        else resolve(true);
+                    });
+                } else {
+                    resolve(true);
+                }
+            });
         });
     });
 };
