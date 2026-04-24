@@ -16,7 +16,7 @@
 <br>
 
 **A real-time, asynchronous web application designed to digitize the complex macroeconomics and operational history of tabletop matches for _Axis & Allies_.**
-![screenshot](https://cdn.imgchest.com/files/1d98740960dd.png)
+![screenshot](https://cdn.imgchest.com/files/25b092a930ab.png)
 
 </div>
 
