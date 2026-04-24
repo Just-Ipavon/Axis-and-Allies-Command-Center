@@ -3,6 +3,15 @@ import { Lock, Unlock, Trash2, Swords, ShoppingCart, RotateCcw } from 'lucide-re
 import { useGameStore } from '../../../store/gameStore';
 import { cn } from '../../../utils/styles';
 import { UNITS } from '../../../constants/gameData';
+import { UnitIconResolver } from '../../../components/icons/UnitIcons';
+
+const FLAG_MAP = {
+  'USSR': '/flags/Russians_large.png',
+  'Germany': '/flags/Germans_large.png',
+  'UK': '/flags/British_large.png',
+  'Japan': '/flags/Japanese_large.png',
+  'USA': '/flags/Americans_large.png',
+};
 
 export default function NationCard({ nation, isEditable }) {
   const { updateNationBank, conquerTerritory, advanceTurn, collectIncome: collectIncomeStore, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases } = useGameStore();
@@ -186,7 +195,10 @@ export default function NationCard({ nation, isEditable }) {
     <div className={cn("p-4 border-2 shadow-[4px_4px_0_0_rgba(43,42,38,1)] flex flex-col gap-4", colorClasses)}>
       <div className="flex justify-between items-center border-b-2 tracking-widest border-current pb-2">
         <div>
-           <h2 className="text-2xl">{nation.name}</h2>
+         <h2 className="text-2xl flex items-center gap-2">
+            {FLAG_MAP[nation.name] && <img src={FLAG_MAP[nation.name]} alt={nation.name} className="w-8 h-8 rounded-full border border-black/30" />}
+            {nation.name}
+         </h2>
            {isEditable ? (
              <input 
                  type="text" 
@@ -280,8 +292,11 @@ export default function NationCard({ nation, isEditable }) {
                  const qty = (nation.purchases && nation.purchases[unit]) || 0;
                  return (
                      <div key={unit} className="flex justify-between items-center bg-black/10 py-1.5 px-2">
-                         <div className="pr-1 flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
-                             <span className="leading-tight">{unit}</span>
+                         <div className="pr-1 flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                             <div className="flex items-center gap-2">
+                                <UnitIconResolver unitName={unit} size={32} className="text-current" />
+                                <span className="leading-tight">{unit}</span>
+                             </div>
                              <div className="flex gap-2 items-center">
                                 <span className="opacity-50 text-[10px] font-bold">A{UNITS[unit].a} D{UNITS[unit].d} M{UNITS[unit].m}</span>
                                 <span className="opacity-80 text-xs font-bold text-amber-500/80">IPC {UNITS[unit].cost}</span>

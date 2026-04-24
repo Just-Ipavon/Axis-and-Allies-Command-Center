@@ -2,6 +2,14 @@ import { Shield, Clock, LogOut, RotateCcw } from 'lucide-react';
 import { cn } from '../../../utils/styles';
 import { TURN_ORDER } from '../../../constants/gameData';
 
+const FLAG_MAP = {
+  'USSR': '/flags/Russians_large.png',
+  'Germany': '/flags/Germans_large.png',
+  'UK': '/flags/British_large.png',
+  'Japan': '/flags/Japanese_large.png',
+  'USA': '/flags/Americans_large.png',
+};
+
 export default function GameHeader({ 
   gameData, 
   connected, 
@@ -52,11 +60,12 @@ export default function GameHeader({
                  </button>
              )}
              {TURN_ORDER.map(t => (
-                 <div key={t} className={cn("px-3 py-1 font-bold border-2 transition-all duration-300", 
+                 <div key={t} className={cn("px-3 py-1 font-bold border-2 transition-all duration-300 flex items-center gap-2", 
                       currentTurn === t 
                       ? "bg-amber-400 text-black border-black shadow-[4px_4px_0_0_rgba(0,0,0,1)] scale-105 z-10" 
                       : "opacity-60 bg-black/10 border-current"
                  )}>
+                     {FLAG_MAP[t] && <img src={FLAG_MAP[t]} alt={t} className="w-5 h-5 rounded-full border border-black/30" />}
                      {t}
                  </div>
              ))}
