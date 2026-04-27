@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { io } from 'socket.io-client';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:1942' : '';
-const socket = io(import.meta.env.DEV ? 'http://localhost:1942' : '/');
+const socketUrl = import.meta.env.DEV ? 'http://localhost:1942' : window.location.origin;
+const lobbySocket = io(`${socketUrl}/lobby`, { autoConnect: true });
+const gameSocket = io(`${socketUrl}/game`, { autoConnect: false });
 
 const savedGameId = localStorage.getItem('axis_gameId');
 const savedRole = localStorage.getItem('axis_role') || '';
@@ -53,28 +55,40 @@ export const useGameStore = create((set, get) => ({
     },
     
     initSocket: () => {
-        socket.on('connect', () => {
+        // Lobby listeners
+        lobbySocket.on('connect', () => {
+            console.log('Connected to lobby namespace');
+            set({ connected: true });
+        });
+
+        lobbySocket.on('roomsUpdated', () => {
+            get().fetchRooms();
+        });
+
+        // Game listeners
+        gameSocket.on('connect', () => {
+            console.log('Connected to game namespace');
             set({ connected: true });
             
-            // Auto-rejoin if session exists (handles F5 reload or Phone Standby wake-up)
             const { gameId } = get();
             if (gameId) {
                 const pwd = localStorage.getItem('axis_password') || '';
-                socket.emit('joinGame', { gameId, password: pwd }, (res) => {
+                gameSocket.emit('joinGame', { gameId, password: pwd }, (res) => {
                     if (res && res.error) {
                         localStorage.removeItem('axis_gameId');
                         set({ gameId: null });
+                        gameSocket.disconnect();
                         console.error("Auto-rejoin failed:", res.error);
                     }
                 });
             }
         });
         
-        socket.on('disconnect', () => {
+        gameSocket.on('disconnect', () => {
             set({ connected: false });
         });
 
-        socket.on('gameState', (data) => {
+        gameSocket.on('gameState', (data) => {
             set({ 
                 gameData: data.game, 
                 nations: data.nations, 
@@ -82,6 +96,14 @@ export const useGameStore = create((set, get) => ({
                 currentTurn: data.currentTurn
             });
         });
+
+        // Connect lobby by default
+        lobbySocket.connect();
+        
+        // If we have a saved gameId, connect to game socket too
+        if (savedGameId) {
+            gameSocket.connect();
+        }
     },
 
     setGameId: (joinData) => {
@@ -94,7 +116,13 @@ export const useGameStore = create((set, get) => ({
                 return resolve(true);
             }
             const payload = typeof joinData === 'string' ? { gameId: joinData } : joinData;
-            socket.emit('joinGame', payload, (res) => {
+            
+            // Ensure we are connected to game namespace before joining
+            if (!gameSocket.connected) {
+                gameSocket.connect();
+            }
+
+            gameSocket.emit('joinGame', payload, (res) => {
                 if (res && res.error) {
                     reject(new Error(res.error));
                 } else {
@@ -115,74 +143,74 @@ export const useGameStore = create((set, get) => ({
     updateNationBank: (name, income, bank, purchases, playerName, logMessage = null) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('updateNation', { gameId, name, income, bank, purchases, playerName, logMessage });
+        gameSocket.emit('updateNation', { gameId, name, income, bank, purchases, playerName, logMessage });
     },
 
     conquerTerritory: (conqueror, victim, value, targetType) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('conquerTerritory', { gameId, conqueror, victim, value, targetType });
+        gameSocket.emit('conquerTerritory', { gameId, conqueror, victim, value, targetType });
     },
 
     advanceTurn: () => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('advanceTurn', gameId);
+        gameSocket.emit('advanceTurn', gameId);
     },
 
     collectIncome: (name, logMessage) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('collectIncome', { gameId, name, logMessage });
+        gameSocket.emit('collectIncome', { gameId, name, logMessage });
     },
 
     addFactory: (name, territoryName, capacity) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('addFactory', { gameId, name, territoryName, capacity });
+        gameSocket.emit('addFactory', { gameId, name, territoryName, capacity });
     },
     
     removeFactory: (name, factoryId) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('removeFactory', { gameId, name, factoryId });
+        gameSocket.emit('removeFactory', { gameId, name, factoryId });
     },
     
     updateFactoryDamage: (name, factoryId, damageDelta, isUndo = false, isFree = false) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('updateFactoryDamage', { gameId, name, factoryId, damageDelta, isUndo, isFree });
+        gameSocket.emit('updateFactoryDamage', { gameId, name, factoryId, damageDelta, isUndo, isFree });
     },
     
     undoTurn: () => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('undoTurn', gameId);
+        gameSocket.emit('undoTurn', gameId);
     },
 
     lockPurchases: (name, logMessage) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('lockPurchases', { gameId, name, logMessage });
+        gameSocket.emit('lockPurchases', { gameId, name, logMessage });
     },
 
     unlockPurchases: (name) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('unlockPurchases', { gameId, name });
+        gameSocket.emit('unlockPurchases', { gameId, name });
     },
 
     transferFactory: (oldNation, newNation, factoryId) => {
         const { gameId } = get();
         if(!gameId) return;
-        socket.emit('transferFactory', { gameId, oldNation, newNation, factoryId });
+        gameSocket.emit('transferFactory', { gameId, oldNation, newNation, factoryId });
     },
 
     verifyMasterPassword: (masterPassword) => {
         return new Promise((resolve, reject) => {
             const { gameId } = get();
             if(!gameId) return reject(new Error('No game connected'));
-            socket.emit('verifyMasterPassword', { gameId, masterPassword }, (res) => {
+            gameSocket.emit('verifyMasterPassword', { gameId, masterPassword }, (res) => {
                 if (res && res.error) reject(new Error(res.error));
                 else resolve(true);
             });
@@ -193,7 +221,7 @@ export const useGameStore = create((set, get) => ({
         return new Promise((resolve, reject) => {
             const { gameId } = get();
             if(!gameId) return reject();
-            socket.emit('resetGame', { gameId, masterPassword }, (res) => {
+            gameSocket.emit('resetGame', { gameId, masterPassword }, (res) => {
                 if (res && res.error) reject(new Error(res.error));
                 else resolve(true);
             });

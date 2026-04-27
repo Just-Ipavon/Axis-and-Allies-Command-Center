@@ -1,11 +1,11 @@
 const db = require('../models');
 const { truncateString, broadcastGameState } = require('./utils');
 
-module.exports = (io, socket) => {
+module.exports = (io, socket, lobbyIo) => {
     const handleLeave = async (gameId) => {
         if (!gameId) return;
         socket.leave(gameId);
-        const room = io.sockets.adapter.rooms.get(gameId);
+        const room = io.adapter.rooms.get(gameId);
         if (!room || room.size === 0) {
             let game = await db.getGame(gameId);
             if (game && game.last_resume_at) {
@@ -50,6 +50,7 @@ module.exports = (io, socket) => {
                 }
 
                 await db.createOrResetGame(gameId, password, masterPassword, roomName);
+                if (lobbyIo) lobbyIo.emit('roomsUpdated');
             } else {
                 if (isCreating) {
                     if (typeof callback === 'function') callback({ error: 'Room already exists.' });
@@ -76,7 +77,7 @@ module.exports = (io, socket) => {
                 return;
             }
 
-            const roomSize = io.sockets.adapter.rooms.get(gameId)?.size || 1;
+            const roomSize = io.adapter.rooms.get(gameId)?.size || 1;
             
             if (roomSize === 1 && game.last_empty_at !== null) {
                 let newPlayTime = game.play_time || 0;
@@ -104,6 +105,7 @@ module.exports = (io, socket) => {
             await db.verifyMasterPassword(cleanGameId, truncateString(masterPassword, 50));
             const game = await db.getGame(cleanGameId);
             await db.createOrResetGame(cleanGameId, "", truncateString(masterPassword, 50), game ? game.room_name : 'Unknown Operation'); 
+            if (lobbyIo) lobbyIo.emit('roomsUpdated');
             await broadcastGameState(io, cleanGameId);
             if (typeof callback === 'function') callback({ success: true });
         } catch (err) {
@@ -143,7 +145,7 @@ module.exports = (io, socket) => {
     // Cleanup on disconnect
     socket.on('disconnect', async () => {
         if (socket.gameId) {
-            const room = io.sockets.adapter.rooms.get(socket.gameId);
+            const room = io.adapter.rooms.get(socket.gameId);
             if (!room || room.size === 0) {
                 let game = await db.getGame(socket.gameId);
                 if (game && game.last_resume_at) {

@@ -27,7 +27,10 @@ const apiLimiter = rateLimit({
 });
 
 // API Routes
-app.use('/api/games', apiLimiter, gameRoutes);
+app.use('/api/games', (req, res, next) => {
+    req.io = io;
+    next();
+}, apiLimiter, gameRoutes);
 
 // Serve static files from the React frontend build
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

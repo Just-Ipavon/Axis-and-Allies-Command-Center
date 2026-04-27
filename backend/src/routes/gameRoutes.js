@@ -16,6 +16,7 @@ router.delete('/:id', async (req, res) => {
     try {
         await db.verifyMasterPassword(req.params.id, req.body.password);
         await db.deleteGame(req.params.id);
+        if (req.io) req.io.of('/lobby').emit('roomsUpdated');
         res.json({ success: true });
     } catch (err) {
         res.status(403).json({ error: err.message });
