@@ -96,7 +96,7 @@ export default function GameHeader({
                 }}
                 className="bg-transparent font-bold capitalize outline-none"
              >
-                <option value="">-- Seleziona Ruolo --</option>
+                <option value="">-- Select Role --</option>
                 <option value="banker">Game Master (Banker)</option>
                 {nations.map(n => <option key={n.name} value={n.name}>{n.name}</option>)}
              </select>
