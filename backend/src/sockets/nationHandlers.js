@@ -27,9 +27,9 @@ module.exports = (io, socket) => {
 
     socket.on('conquerTerritory', async (data) => {
         try {
-            const { gameId, conqueror, victim, value, targetType } = data;
+            const { gameId, conqueror, victim, value, targetType, liberatedFor } = data;
             const cleanGameId = truncateString(gameId, 50);
-            await db.conquerTerritory(cleanGameId, truncateString(conqueror, 50), truncateString(victim, 50), value, truncateString(targetType, 50));
+            await db.conquerTerritory(cleanGameId, truncateString(conqueror, 50), truncateString(victim, 50), value, truncateString(targetType, 50), liberatedFor ? truncateString(liberatedFor, 50) : null);
             await broadcastGameState(io, cleanGameId);
         } catch(e) { console.error(e) }
     });
@@ -78,6 +78,13 @@ module.exports = (io, socket) => {
         try {
             const cleanGameId = truncateString(gameId, 50);
             await db.unlockPurchases(cleanGameId, truncateString(name, 50));
+            await broadcastGameState(io, cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+    socket.on('toggleCapitalStatus', async ({ gameId, name, isCaptured }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.toggleCapitalStatus(cleanGameId, truncateString(name, 50), isCaptured);
             await broadcastGameState(io, cleanGameId);
         } catch(e) { console.error(e) }
     });

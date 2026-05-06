@@ -146,10 +146,10 @@ export const useGameStore = create((set, get) => ({
         gameSocket.emit('updateNation', { gameId, name, income, bank, purchases, playerName, logMessage });
     },
 
-    conquerTerritory: (conqueror, victim, value, targetType) => {
+    conquerTerritory: (conqueror, victim, value, targetType, liberatedFor = null) => {
         const { gameId } = get();
         if(!gameId) return;
-        gameSocket.emit('conquerTerritory', { gameId, conqueror, victim, value, targetType });
+        gameSocket.emit('conquerTerritory', { gameId, conqueror, victim, value, targetType, liberatedFor });
     },
 
     advanceTurn: () => {
@@ -226,5 +226,11 @@ export const useGameStore = create((set, get) => ({
                 else resolve(true);
             });
         });
+    },
+
+    toggleCapitalStatus: (name, isCaptured) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        gameSocket.emit('toggleCapitalStatus', { gameId, name, isCaptured });
     }
 }));

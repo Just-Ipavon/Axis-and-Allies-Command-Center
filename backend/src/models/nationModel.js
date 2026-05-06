@@ -28,7 +28,7 @@ const collectIncome = (gameId, name, logMessage) => {
         db.get('SELECT current_turn FROM games WHERE id = ?', [gameId], (err, game) => {
             if (err || !game) return reject(err || new Error('Game not found'));
             
-            db.get('SELECT bank, income, purchases, player_name FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
+            db.get('SELECT bank, income, purchases, player_name, capital_captured FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
                 if (err || !nation) return reject(err || new Error('Nation not found'));
 
                 const currIdx = TURN_ORDER.indexOf(game.current_turn) || 0;
@@ -39,9 +39,10 @@ const collectIncome = (gameId, name, logMessage) => {
                     db.run('UPDATE games SET current_turn = ? WHERE id = ?', [nextTurn, gameId]);
 
                     // 2. Update Nation Bank & Save Purchases to last_purchases
+                    const collectedIncome = nation.capital_captured ? 0 : nation.income;
                     db.run(
                         'UPDATE nations SET bank = bank + ?, last_purchases = purchases, purchases = ?, purchases_locked = 0 WHERE game_id = ? AND name = ?',
-                        [nation.income, JSON.stringify({}), gameId, name]
+                        [collectedIncome, JSON.stringify({}), gameId, name]
                     );
 
                     // 3. Log
@@ -106,40 +107,75 @@ const advanceTurn = (gameId) => {
     });
 };
 
-const conquerTerritory = (gameId, conqueror, victim, value, targetType = 'income') => {
+const conquerTerritory = (gameId, conqueror, victim, value, targetType = 'income', liberatedFor = null) => {
     return new Promise((resolve, reject) => {
         const val = parseInt(value) || 0;
         if (val <= 0) return reject(new Error("Invalid value"));
         
-        if (targetType === 'bank') {
-            db.run('UPDATE nations SET bank = CASE WHEN bank - ? < 0 THEN 0 ELSE bank - ? END WHERE game_id = ? AND name = ?', [val, val, gameId, victim], (err) => {
-                if(err) return reject(err);
-                db.run('UPDATE nations SET bank = bank + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror], (err) => {
-                    if(err) return reject(err);
-                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                        [gameId, `${conqueror} plundered ${val} IPCs from the bank of ${victim}.`], 
-                        (err) => {
-                            if (err) reject(err);
-                            else resolve(true);
-                        }
-                    );
+        if (targetType === 'capital') {
+            db.get('SELECT bank FROM nations WHERE game_id = ? AND name = ?', [gameId, victim], (err, victimRow) => {
+                if (err || !victimRow) return reject(err || new Error("Victim not found"));
+                const victimBank = victimRow.bank;
+                
+                db.serialize(() => {
+                    db.run('UPDATE nations SET income = CASE WHEN income - ? < 0 THEN 0 ELSE income - ? END, bank = 0, capital_captured = 1 WHERE game_id = ? AND name = ?', [val, val, gameId, victim]);
+                    db.run('UPDATE nations SET income = income + ?, bank = bank + ? WHERE game_id = ? AND name = ?', [val, victimBank, gameId, conqueror], (err) => {
+                        if(err) return reject(err);
+                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                            [gameId, `🏆 ${conqueror} conquered the CAPITAL of ${victim} worth ${val} Income, plundering ${victimBank} IPCs from their bank!`], 
+                            (err) => {
+                                if (err) reject(err);
+                                else resolve(true);
+                            }
+                        );
+                    });
                 });
             });
         } else {
             db.run('UPDATE nations SET income = CASE WHEN income - ? < 0 THEN 0 ELSE income - ? END WHERE game_id = ? AND name = ?', [val, val, gameId, victim], (err) => {
                 if(err) return reject(err);
-                db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror], (err) => {
-                    if(err) return reject(err);
-                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                        [gameId, `${conqueror} conquered territory from ${victim} worth ${val} Income.`], 
-                        (err) => {
-                            if (err) reject(err);
-                            else resolve(true);
-                        }
-                    );
-                });
+                
+                if (liberatedFor) {
+                    db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, liberatedFor], (err) => {
+                        if(err) return reject(err);
+                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                            [gameId, `🕊️ ${conqueror} liberated territory from ${victim} for ${liberatedFor} (+${val} Income for ${liberatedFor}).`], 
+                            (err) => {
+                                if (err) reject(err);
+                                else resolve(true);
+                            }
+                        );
+                    });
+                } else {
+                    db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror], (err) => {
+                        if(err) return reject(err);
+                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                            [gameId, `${conqueror} conquered territory from ${victim} worth ${val} Income.`], 
+                            (err) => {
+                                if (err) reject(err);
+                                else resolve(true);
+                            }
+                        );
+                    });
+                }
             });
         }
+    });
+};
+
+const toggleCapitalStatus = (gameId, name, isCaptured) => {
+    return new Promise((resolve, reject) => {
+        db.run('UPDATE nations SET capital_captured = ? WHERE game_id = ? AND name = ?', [isCaptured ? 1 : 0, gameId, name], (err) => {
+            if (err) return reject(err);
+            const status = isCaptured ? 'CAPTURED' : 'LIBERATED';
+            db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
+                [gameId, `The capital of ${name} has been marked as ${status}.`], 
+                (err2) => {
+                    if (err2) reject(err2);
+                    else resolve(true);
+                }
+            );
+        });
     });
 };
 
@@ -380,5 +416,6 @@ module.exports = {
     transferFactory,
     undoTurn,
     lockPurchases,
-    unlockPurchases
+    unlockPurchases,
+    toggleCapitalStatus
 };

@@ -14,7 +14,7 @@ const FLAG_MAP = {
 };
 
 export default function NationCard({ nation, isEditable }) {
-  const { updateNationBank, conquerTerritory, advanceTurn, collectIncome: collectIncomeStore, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases } = useGameStore();
+  const { updateNationBank, conquerTerritory, advanceTurn, collectIncome: collectIncomeStore, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases, toggleCapitalStatus } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
   const canCollect = isEditable && isMyTurn;
@@ -22,6 +22,8 @@ export default function NationCard({ nation, isEditable }) {
   const [battleVictim, setBattleVictim] = useState('');
   const [battleValue, setBattleValue] = useState(1);
   const [battleTargetType, setBattleTargetType] = useState('income');
+  const [battleLiberatedFor, setBattleLiberatedFor] = useState('');
+  const isCapitalCaptured = !!nation.capital_captured;
   const [adminEditMode, setAdminEditMode] = useState(false);
   const [transferFactoryData, setTransferFactoryData] = useState(null);
   const [transferVictim, setTransferVictim] = useState('');
@@ -46,7 +48,7 @@ export default function NationCard({ nation, isEditable }) {
     setLocalIncome(nation.income);
   }, [nation.income]);
 
-  const purchasesLocked = !!nation.purchases_locked;
+  const purchasesLocked = !!nation.purchases_locked || isCapitalCaptured;
   const currentPurchases = nation.purchases || {};
   const hasPurchases = Object.values(currentPurchases).some(qty => qty > 0);
   const isBanker = role === 'banker';
@@ -180,7 +182,7 @@ export default function NationCard({ nation, isEditable }) {
 
   const handleConquer = () => {
       if (!battleVictim) return alert("Select a target nation");
-      conquerTerritory(nation.name, battleVictim, battleValue, battleTargetType);
+      conquerTerritory(nation.name, battleVictim, battleValue, battleTargetType, battleLiberatedFor || null);
       setBattleMode(false);
   };
 
@@ -204,6 +206,12 @@ export default function NationCard({ nation, isEditable }) {
    const collectIncome = () => {
        if (!isEditable) return;
        
+       if (isCapitalCaptured) {
+           const log = `${nation.name} skips income collection (Capital Captured).`;
+           collectIncomeStore(nation.name, log);
+           return;
+       }
+
        if (!hasPurchases) {
            if (!window.confirm("The cart is empty. Are you sure you want to collect income and pass the turn without mobilizing troops?")) {
                return;
@@ -226,9 +234,27 @@ export default function NationCard({ nation, isEditable }) {
     <div className={cn("p-4 border-2 shadow-[4px_4px_0_0_rgba(43,42,38,1)] flex flex-col gap-4", colorClasses)}>
       <div className="flex justify-between items-center border-b-2 tracking-widest border-current pb-2">
         <div>
-         <h2 className="text-2xl flex items-center gap-2 mb-2">
+         <h2 className="text-2xl flex items-center gap-2 mb-2 relative group">
             {FLAG_MAP[nation.name] && <img src={FLAG_MAP[nation.name]} alt={nation.name} className="w-8 h-8 rounded-full border border-black/30" />}
             {nation.name}
+            {isCapitalCaptured && (
+                <button 
+                    onClick={() => { if(window.confirm(`Liberate ${nation.name}'s capital?`)) toggleCapitalStatus(nation.name, false) }}
+                    className="ml-2 text-[10px] bg-red-900 text-white px-2 py-0.5 rounded shadow flex items-center gap-1 hover:bg-green-700 transition-colors uppercase font-bold tracking-wider"
+                    title="Click to Liberate Capital"
+                >
+                    ⚠️ Captured
+                </button>
+            )}
+            {!isCapitalCaptured && adminEditMode && (
+                <button 
+                    onClick={() => toggleCapitalStatus(nation.name, true)}
+                    className="ml-2 text-[10px] bg-black/30 text-white/50 px-2 py-0.5 rounded hover:text-white hover:bg-red-900 transition-colors uppercase font-bold tracking-wider"
+                    title="Force Capital Capture"
+                >
+                    Set Captured
+                </button>
+            )}
          </h2>
            {isEditable ? (
              <input 
@@ -287,16 +313,23 @@ export default function NationCard({ nation, isEditable }) {
                    <div className="font-bold mb-1 uppercase text-xs opacity-80">Conquered Value</div>
                    <input type="number" value={battleValue} onChange={e=>setBattleValue(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none" min={1} />
                    
-                   <div className="font-bold mt-2 mb-1 uppercase text-xs opacity-80">Target:</div>
-                   <div className="flex gap-4 text-xs font-bold mb-2">
-                        <label className="flex items-center gap-1 cursor-pointer"><input type="radio" checked={battleTargetType==='bank'} onChange={()=>setBattleTargetType('bank')} /> Bank IPC</label>
-                        <label className="flex items-center gap-1 cursor-pointer"><input type="radio" checked={battleTargetType==='income'} onChange={()=>setBattleTargetType('income')} /> Income</label>
+                   <div className="mt-2 mb-2">
+                       <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors">
+                           <input type="checkbox" checked={battleTargetType==='capital'} onChange={(e)=>setBattleTargetType(e.target.checked ? 'capital' : 'income')} className="w-4 h-4 accent-amber-500" />
+                           🏆 Is it an ENEMY Capital? (Steal Bank)
+                       </label>
                    </div>
 
                    <div className="font-bold mt-2 mb-1 uppercase text-xs opacity-80">From Nation</div>
                    <select value={battleVictim} onChange={e=>setBattleVictim(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none cursor-pointer">
                       <option value="">-- Select Enemy --</option>
                       {enemyAlliance.map(n => <option key={n} value={n}>{n}</option>)}
+                   </select>
+
+                   <div className="font-bold mt-2 mb-1 uppercase text-xs opacity-80">Original Owner (If liberating)</div>
+                   <select value={battleLiberatedFor} onChange={e=>setBattleLiberatedFor(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none cursor-pointer">
+                      <option value="">-- Self --</option>
+                      {(isAxis ? AXIS : ALLIES).filter(n=>n!==nation.name).map(n => <option key={n} value={n}>{n}</option>)}
                    </select>
                    <div className="flex gap-2 mt-4">
                        <button onClick={handleConquer} className="flex-1 bg-green-700 text-white shadow-sm border border-black font-bold py-2 uppercase hover:bg-green-600 active:scale-95 text-xs">Confirm</button>
@@ -313,7 +346,14 @@ export default function NationCard({ nation, isEditable }) {
       </div>
 
       {/* Purchase Section */}
-      <div className="flex-1 mt-2">
+      <div className="flex-1 mt-2 relative">
+          {isCapitalCaptured && (
+              <div className="absolute inset-0 z-10 bg-black/50 backdrop-blur-[1px] flex flex-col items-center justify-center text-center p-2 border-y-2 border-red-500/50">
+                  <span className="text-xl">⚠️</span>
+                  <span className="font-black text-red-500 uppercase tracking-widest text-sm drop-shadow-md">Capital Captured</span>
+                  <span className="text-[10px] uppercase font-bold opacity-80 mt-1">Cannot mobilize units</span>
+              </div>
+          )}
           <div className="flex justify-between items-end mb-1 border-b border-current/20 pb-1 flex-wrap gap-1">
              <h3 className="text-sm font-bold uppercase">Mobilization</h3>
              <span className="text-[10px] bg-white/20 px-2 py-0.5 font-bold shadow-sm border border-current">Capacity: {totalPurchased}/{totalCapacity}</span>
@@ -508,10 +548,12 @@ export default function NationCard({ nation, isEditable }) {
               {canCollect ? (
                   <button 
                     onClick={collectIncome} 
-                    disabled={hasPurchases && !purchasesLocked}
-                    className={cn("font-bold px-4 py-2 border border-current shadow active:scale-95 flex-1 flex items-center justify-center text-center text-[13px] leading-tight", (hasPurchases && !purchasesLocked) ? "bg-gray-500 opacity-50 cursor-not-allowed" : "bg-green-600/90 text-white hover:bg-green-600")}
+                    disabled={hasPurchases && !purchasesLocked && !isCapitalCaptured}
+                    className={cn("font-bold px-4 py-2 border border-current shadow active:scale-95 flex-1 flex items-center justify-center text-center text-[13px] leading-tight", 
+                        (hasPurchases && !purchasesLocked && !isCapitalCaptured) ? "bg-gray-500 opacity-50 cursor-not-allowed" : 
+                        isCapitalCaptured ? "bg-red-800 text-white hover:bg-red-700" : "bg-green-600/90 text-white hover:bg-green-600")}
                   >
-                      Collect Income
+                      {isCapitalCaptured ? "Skip Income" : "Collect Income"}
                   </button>
               ) : (
                   <div className="flex-1 border border-current font-bold bg-black/20 text-current flex justify-center items-center text-xs uppercase text-center leading-tight py-2 px-1">
