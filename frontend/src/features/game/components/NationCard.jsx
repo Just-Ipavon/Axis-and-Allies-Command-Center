@@ -409,17 +409,17 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
       {/* Anniversary Edition Features Panel */}
       {isAnniversary && (
           <div className="mt-4 border-t border-current/20 pt-4 flex flex-col gap-2">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                   <button 
                       onClick={() => setOpenPanel(openPanel === 'tech' ? null : 'tech')}
-                      className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1", 
+                      className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1 min-w-[80px]", 
                           openPanel === 'tech' ? "bg-amber-500 text-black font-black" : "bg-black/10 hover:bg-black/20")}
                   >
                       🔬 Tech R&D ({(nation.tech || []).length})
                   </button>
                   <button 
                       onClick={() => setOpenPanel(openPanel === 'objectives' ? null : 'objectives')}
-                      className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1", 
+                      className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1 min-w-[80px]", 
                           openPanel === 'objectives' ? "bg-amber-500 text-black font-black" : "bg-black/10 hover:bg-black/20")}
                   >
                       🏆 Objectives ({(nation.active_objectives || []).length}/{objectivesCount})
@@ -427,7 +427,7 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
                   {nation.name === 'USA' && (
                       <button 
                           onClick={() => setOpenPanel(openPanel === 'china' ? null : 'china')}
-                          className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1", 
+                          className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1 min-w-[80px]", 
                               openPanel === 'china' ? "bg-red-800 text-white font-black" : "bg-black/10 hover:bg-black/20")}
                       >
                           🇨🇳 China ({chinaControlledCount})

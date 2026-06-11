@@ -29,12 +29,12 @@ export default function TechPanel({
 }) {
   return (
     <div className="bg-black/20 p-3 border border-current/20 flex flex-col gap-3">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-2">
         <span className="text-xs font-bold uppercase text-left">
           Research Tokens: {nation.research_tokens || 0}
         </span>
         {isEditable && (
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1 justify-end">
             <button 
               onClick={() => buyTechToken(nation.name)} 
               disabled={nation.bank < 5}
@@ -64,7 +64,7 @@ export default function TechPanel({
                 All research tokens rolled this turn
               </div>
             )}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button 
                 disabled={isDisabled}
                 onClick={() => {

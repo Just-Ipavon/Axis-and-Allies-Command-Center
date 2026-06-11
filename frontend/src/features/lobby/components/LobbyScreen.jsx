@@ -108,23 +108,23 @@ export default function LobbyScreen() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 md:p-8">
-      <div className="w-full max-w-5xl bg-vintage-paper border-4 border-vintage-text shadow-[6px_6px_0_0_rgba(43,42,38,1)] sm:shadow-[12px_12px_0_0_rgba(43,42,38,1)] p-4 sm:p-6 md:p-10 flex flex-col gap-8 animate-in fade-in duration-300">
+    <div className="min-h-screen flex items-center justify-center p-2 sm:p-4 md:p-8">
+      <div className="w-full max-w-5xl bg-vintage-paper border-4 border-vintage-text shadow-[4px_4px_0_0_rgba(43,42,38,1)] sm:shadow-[12px_12px_0_0_rgba(43,42,38,1)] p-3 sm:p-6 md:p-10 flex flex-col gap-8 animate-in fade-in duration-300">
         
         {/* Main Header */}
         <div className="text-center md:text-left border-b-4 border-vintage-text pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-col md:flex-row text-center md:text-left">
-            <Shield className="w-16 h-16 text-vintage-text" />
+            <Shield className="w-16 h-16 text-vintage-text shrink-0" />
             <div>
-              <h1 className="text-4xl md:text-5xl font-display uppercase tracking-wider text-vintage-text">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-display uppercase tracking-wider text-vintage-text">
                 Axis & Allies
               </h1>
-              <h2 className="text-xl font-display tracking-widest text-vintage-text/80 mt-1">
+              <h2 className="text-base sm:text-xl font-display tracking-widest text-vintage-text/80 mt-1">
                 Command Center & Tactical HQ
               </h2>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center justify-center md:justify-end gap-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center md:justify-end gap-3 w-full sm:w-auto">
             <button 
               onClick={toggleDarkMode}
               className="p-2 border-2 border-vintage-text bg-vintage-bg shadow-[4px_4px_0_0_rgba(43,42,38,1)] hover:bg-vintage-bg/40 active:translate-y-[1px] active:translate-x-[1px] transition-all rounded"
@@ -132,9 +132,9 @@ export default function LobbyScreen() {
             >
               {isDark ? <Sun size={20} className="text-amber-500 shrink-0" /> : <Moon size={20} className="shrink-0" />}
             </button>
-            <div className="flex justify-center md:justify-end items-center gap-2 text-sm bg-black/5 border border-vintage-text/30 px-4 py-2 font-mono h-[40px]">
-              <span className={cn("w-3 h-3 rounded-full shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)]", connected ? "bg-green-500" : "bg-red-500")} />
-              <span className="font-bold">{connected ? "HQ SECURE LINK ESTABLISHED" : "LINK OFFLINE: RETRYING..."}</span>
+            <div className="flex justify-center md:justify-end items-center gap-2 text-xs sm:text-sm bg-black/5 border border-vintage-text/30 px-3 py-2 font-mono min-h-[40px] w-full sm:w-auto">
+              <span className={cn("w-3 h-3 rounded-full shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)] shrink-0", connected ? "bg-green-500" : "bg-red-500")} />
+              <span className="font-bold whitespace-nowrap">{connected ? "HQ SECURE LINK ESTABLISHED" : "LINK OFFLINE: RETRYING..."}</span>
             </div>
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function LobbyScreen() {
           
           {/* Left Panel: HQ Actions */}
           <div className="md:col-span-2 space-y-6">
-            <div className="bg-black/5 border border-vintage-text/40 p-5 space-y-6 shadow-sm">
+            <div className="bg-black/5 border border-vintage-text/40 p-4 sm:p-5 space-y-4 sm:space-y-6 shadow-sm">
               <h3 className="font-bold uppercase tracking-wide border-b-2 border-vintage-text/30 pb-2 text-sm">
                 Command Operations
               </h3>
@@ -152,7 +152,7 @@ export default function LobbyScreen() {
               <div>
                 <button 
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="vintage-btn w-full flex items-center justify-center gap-2 text-md py-3 shadow-[6px_6px_0_0_rgba(43,42,38,1)] hover:bg-vintage-bg/50"
+                    className="vintage-btn w-full flex items-center justify-center gap-2 text-md py-3 shadow-[4px_4px_0_0_rgba(43,42,38,1)] sm:shadow-[6px_6px_0_0_rgba(43,42,38,1)] hover:bg-vintage-bg/50"
                 >
                     <PlusCircle size={18} /> INITIATE NEW OPERATION
                 </button>
@@ -161,16 +161,16 @@ export default function LobbyScreen() {
 
               <div className="pt-4 border-t border-vintage-text/20">
                 <h4 className="font-bold uppercase text-xs mb-2 tracking-wider">Direct Access Code</h4>
-                <form onSubmit={handleDirectJoin} className="flex gap-2">
+                <form onSubmit={handleDirectJoin} className="flex flex-col sm:flex-row gap-2">
                   <input 
                     type="text" 
                     placeholder="Enter 6-char code" 
                     value={directJoinId}
                     onChange={e => setDirectJoinId(e.target.value.toUpperCase())}
-                    className="flex-1 bg-vintage-bg border-2 border-vintage-text p-2 text-sm outline-none focus:bg-white/50 uppercase placeholder:normal-case font-mono font-bold"
+                    className="flex-1 bg-vintage-bg border-2 border-vintage-text p-2 text-sm outline-none focus:bg-white/50 uppercase placeholder:normal-case font-mono font-bold w-full"
                     required
                   />
-                  <button type="submit" className="vintage-btn text-xs uppercase tracking-wider py-2">
+                  <button type="submit" className="vintage-btn text-xs uppercase tracking-wider py-2 w-full sm:w-auto">
                     Connect
                   </button>
                 </form>
@@ -180,13 +180,13 @@ export default function LobbyScreen() {
 
           {/* Right Panel: Operations Briefing Room */}
           <div className="md:col-span-3 space-y-4">
-            <div className="flex justify-between items-center border-b-2 border-vintage-text/30 pb-2">
-              <h3 className="font-bold uppercase tracking-wide flex items-center gap-2 text-sm">
-                <Clock size={16} /> Active Theaters / Operations Room
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-vintage-text/30 pb-2 gap-2">
+              <h3 className="font-bold uppercase tracking-wide flex items-center gap-2 text-xs sm:text-sm">
+                <Clock size={16} className="shrink-0" /> <span className="truncate">Active Theaters / Operations Room</span>
               </h3>
               <button 
                 onClick={fetchRooms} 
-                className="text-xs uppercase font-bold text-vintage-accent hover:underline flex items-center gap-1 transition-all"
+                className="text-xs uppercase font-bold text-vintage-accent hover:underline flex items-center gap-1 transition-all self-end sm:self-auto shrink-0"
                 title="Reload Operations List"
               >
                 <RefreshCw size={12} className="animate-spin-hover" /> Refresh List
@@ -258,7 +258,7 @@ export default function LobbyScreen() {
       {/* CREATE ROOM MODAL */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-[calc(100%-12px)] sm:w-full max-w-md bg-vintage-paper border-4 border-vintage-text shadow-[6px_6px_0_0_rgba(43,42,38,1)] sm:shadow-[12px_12px_0_0_rgba(43,42,38,1)] p-4 sm:p-6 relative">
+            <div className="w-[calc(100%-16px)] sm:w-full max-w-md bg-vintage-paper border-4 border-vintage-text shadow-[4px_4px_0_0_rgba(43,42,38,1)] sm:shadow-[12px_12px_0_0_rgba(43,42,38,1)] p-4 sm:p-6 relative mx-2 sm:mx-0">
                 <button 
                     onClick={() => setIsCreateModalOpen(false)}
                     className="absolute top-4 right-4 text-vintage-text/60 hover:text-vintage-text transition-colors"
@@ -338,17 +338,17 @@ export default function LobbyScreen() {
                         <p className="text-[10px] mt-1 opacity-60 italic text-right font-bold text-vintage-accent">SECRET CLEARANCE LEVEL</p>
                     </div>
 
-                    <div className="pt-4 flex gap-4">
+                    <div className="pt-4 flex flex-col-reverse sm:flex-row gap-3">
                         <button 
                             type="button"
                             onClick={() => setIsCreateModalOpen(false)}
-                            className="flex-1 px-4 py-3 border-2 border-vintage-text font-bold hover:bg-black/10 transition-all uppercase text-sm"
+                            className="w-full sm:flex-1 px-4 py-3 border-2 border-vintage-text font-bold hover:bg-black/10 transition-all uppercase text-sm"
                         >
                             Abort
                         </button>
                         <button 
                             type="submit" 
-                            className="flex-[2] vintage-btn py-3 uppercase tracking-widest"
+                            className="w-full sm:flex-[2] vintage-btn py-3 uppercase tracking-widest"
                         >
                             Initiate Operation
                         </button>

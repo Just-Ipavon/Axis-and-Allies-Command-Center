@@ -52,7 +52,7 @@ export default function GameHeader({
   return (
     <header className="flex flex-col md:flex-row justify-between items-center border-b-4 border-vintage-text pb-4 gap-4">
       <div>
-         <h1 className="text-[5.5vw] sm:text-3xl md:text-4xl lg:text-5xl flex items-center gap-2 mb-2 font-display uppercase tracking-wide whitespace-nowrap">
+         <h1 className="text-[4.8vw] sm:text-3xl md:text-4xl lg:text-5xl flex items-center gap-2 mb-2 font-display uppercase tracking-tight sm:tracking-wide whitespace-nowrap">
             <Shield className="w-8 h-8 md:w-10 md:h-10 shrink-0" />
             {getHeaderTitle()}
          </h1>
@@ -111,8 +111,8 @@ export default function GameHeader({
           </div>
       </div>
       
-             <div className="flex flex-col gap-3 items-end">
-            <div className="flex gap-2 items-center">
+             <div className="flex flex-col gap-3 items-center md:items-end w-full md:w-auto">
+            <div className="flex gap-2 items-center w-full justify-center md:justify-end">
                 <button 
                   onClick={toggleDarkMode}
                   className="p-2 border-2 border-vintage-text bg-vintage-paper shadow-[4px_4px_0_0_rgba(43,42,38,1)] hover:bg-vintage-bg/40 active:translate-y-[1px] active:translate-x-[1px] transition-all rounded"
@@ -121,13 +121,13 @@ export default function GameHeader({
                   {isDark ? <Sun size={20} className="text-amber-500 shrink-0" /> : <Moon size={20} className="shrink-0" />}
                 </button>
                 
-                <div className="flex items-center gap-2 bg-black/80 text-amber-500 font-display text-2xl px-4 py-1 border-2 border-amber-500 shadow-[4px_4px_0_0_rgba(180,83,9,1)]">
-                    <Clock size={20} className="text-amber-500" />
+                <div className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-black/80 text-amber-500 font-display text-2xl px-4 py-1 border-2 border-amber-500 shadow-[4px_4px_0_0_rgba(180,83,9,1)]">
+                    <Clock size={20} className="text-amber-500 shrink-0" />
                     {timerDisplay}
                 </div>
             </div>
 
-           <div className="flex py-2 px-4 border-2 border-vintage-text bg-vintage-paper shadow-[4px_4px_0_0_rgba(43,42,38,1)]">
+           <div className="flex py-2 px-4 border-2 border-vintage-text bg-vintage-paper shadow-[4px_4px_0_0_rgba(43,42,38,1)] w-full sm:w-auto justify-between sm:justify-start">
              <span className="font-bold mr-2 uppercase tracking-wide self-center">Role:</span>
              <select 
                 value={role} 
