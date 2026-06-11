@@ -52,7 +52,7 @@ export default function GameHeader({
   return (
     <header className="flex flex-col md:flex-row justify-between items-center border-b-4 border-vintage-text pb-4 gap-4">
       <div>
-         <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl flex items-center gap-2 mb-2 font-display uppercase tracking-wide whitespace-nowrap">
+         <h1 className="text-[5.5vw] sm:text-3xl md:text-4xl lg:text-5xl flex items-center gap-2 mb-2 font-display uppercase tracking-wide whitespace-nowrap">
             <Shield className="w-8 h-8 md:w-10 md:h-10 shrink-0" />
             {getHeaderTitle()}
          </h1>

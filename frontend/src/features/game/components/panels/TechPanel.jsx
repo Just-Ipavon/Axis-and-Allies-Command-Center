@@ -92,7 +92,7 @@ export default function TechPanel({
         );
       })()}
 
-      <div className="grid grid-cols-2 gap-4 mt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
         <div>
           <div className="text-[10px] font-bold uppercase border-b border-current/20 pb-1 mb-1.5 opacity-80 text-left">
             Chart 1: Land & Production

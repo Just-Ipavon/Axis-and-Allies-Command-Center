@@ -121,7 +121,7 @@ export default function FactoriesPanel({
 
       <div className="flex flex-col gap-0.5 text-sm max-h-[140px] overflow-y-auto pr-0.5">
         {factories.map(f => (
-          <div key={f.id} className="flex justify-between items-center bg-black/20 py-1 px-2 border border-white/5 shadow-sm">
+          <div key={f.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-black/20 py-2 px-2 border border-white/5 shadow-sm gap-2">
             <div className="flex flex-col leading-tight min-w-0">
               <span className="font-bold text-[11px] truncate">{f.name}</span>
               <div className="flex gap-2 items-center opacity-60 text-[9px] uppercase font-bold tracking-tighter">
@@ -131,7 +131,7 @@ export default function FactoriesPanel({
               </div>
             </div>
             
-            <div className="flex items-center gap-1 shrink-0 ml-auto">
+            <div className="flex items-center gap-1 justify-between sm:justify-end shrink-0 sm:ml-auto w-full sm:w-auto border-t sm:border-t-0 border-white/10 pt-1.5 sm:pt-0">
               {adminEditMode ? (
                 <input 
                   type="number" 

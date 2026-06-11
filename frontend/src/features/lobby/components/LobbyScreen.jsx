@@ -109,7 +109,7 @@ export default function LobbyScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 md:p-8">
-      <div className="w-full max-w-5xl bg-vintage-paper border-4 border-vintage-text shadow-[12px_12px_0_0_rgba(43,42,38,1)] p-6 md:p-10 flex flex-col gap-8 animate-in fade-in duration-300">
+      <div className="w-full max-w-5xl bg-vintage-paper border-4 border-vintage-text shadow-[6px_6px_0_0_rgba(43,42,38,1)] sm:shadow-[12px_12px_0_0_rgba(43,42,38,1)] p-4 sm:p-6 md:p-10 flex flex-col gap-8 animate-in fade-in duration-300">
         
         {/* Main Header */}
         <div className="text-center md:text-left border-b-4 border-vintage-text pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -258,7 +258,7 @@ export default function LobbyScreen() {
       {/* CREATE ROOM MODAL */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-md bg-vintage-paper border-4 border-vintage-text shadow-[12px_12px_0_0_rgba(43,42,38,1)] p-6 relative">
+            <div className="w-[calc(100%-12px)] sm:w-full max-w-md bg-vintage-paper border-4 border-vintage-text shadow-[6px_6px_0_0_rgba(43,42,38,1)] sm:shadow-[12px_12px_0_0_rgba(43,42,38,1)] p-4 sm:p-6 relative">
                 <button 
                     onClick={() => setIsCreateModalOpen(false)}
                     className="absolute top-4 right-4 text-vintage-text/60 hover:text-vintage-text transition-colors"

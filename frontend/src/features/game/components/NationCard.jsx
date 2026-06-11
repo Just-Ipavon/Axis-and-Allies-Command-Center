@@ -246,9 +246,9 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
 
   return (
     <div className={cn("p-4 border-2 shadow-[4px_4px_0_0_rgba(43,42,38,1)] flex flex-col gap-4", colorClasses)}>
-      <div className="flex justify-between items-center border-b-2 tracking-widest border-current pb-2">
-        <div>
-         <h2 className="text-2xl flex items-center gap-2 mb-2 relative group">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b-2 tracking-widest border-current pb-2 gap-2">
+        <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
+          <h2 className="text-2xl flex items-center justify-center sm:justify-start gap-2 mb-1 relative group">
             {FLAG_MAP[nation.name] && <img src={FLAG_MAP[nation.name]} alt={nation.name} className="w-8 h-8 rounded-full border border-black/30" />}
             {nation.name}
             {isCapitalCaptured && (
@@ -269,8 +269,8 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
                     Set Captured
                 </button>
             )}
-         </h2>
-           {isEditable ? (
+          </h2>
+          {isEditable ? (
              <input 
                  type="text" 
                  placeholder="Player Name" 
@@ -278,14 +278,14 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
                  onChange={handlePlayerNameChange}
                  onBlur={handlePlayerNameBlur}
                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-                 className="bg-black/20 text-sm p-1 outline-none w-32 border-b border-dashed border-current focus:bg-black/30 placeholder-current/50" 
+                 className="bg-black/20 text-sm p-1 outline-none w-32 border-b border-dashed border-current focus:bg-black/30 placeholder-current/50 text-center sm:text-left" 
              />
-           ) : (
+          ) : (
              <div className="text-sm italic opacity-80">{nation.player_name || 'No Commander'}</div>
-           )}
+          )}
         </div>
-        <div className="text-right">
-          <div className="text-sm uppercase opacity-80 flex justify-end items-center gap-1">
+        <div className="text-center sm:text-right flex flex-row sm:flex-col justify-between sm:justify-end items-center sm:items-end w-full sm:w-auto border-t sm:border-t-0 border-current/10 pt-2 sm:pt-0">
+          <div className="text-sm uppercase opacity-80 flex items-center gap-1">
              Bank (IPC)
              {isEditable && !adminEditMode && <button onClick={requestAdminMode} title="Unlock manual editing" className="opacity-50 hover:opacity-100 hover:text-amber-400"><Lock size={10} /></button>}
              {adminEditMode && <button onClick={() => setAdminEditMode(false)} title="Lock and Save" className="hover:scale-110"><Unlock size={10} className="text-red-500" /></button>}
@@ -465,7 +465,7 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
 
 
       {isEditable && (
-          <div className="pt-2 border-t-2 border-current/30 mt-auto flex justify-between gap-2 items-stretch min-h-[3rem]">
+          <div className="pt-2 border-t-2 border-current/30 mt-auto flex flex-col sm:flex-row justify-between gap-2 items-stretch min-h-[3rem]">
               {isMyTurn && !purchasesLocked && hasPurchases && (
                   <button onClick={handleConfirmCart} className="flex-1 bg-amber-500 text-black font-bold px-2 py-2 shadow hover:bg-amber-400 active:scale-95 flex items-center justify-center gap-1 text-[13px] leading-tight">
                       <ShoppingCart size={16} className="shrink-0" /> Confirm Cart
