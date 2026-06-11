@@ -52,7 +52,7 @@ const createOrResetGame = (gameId, password = "", masterPassword = "", roomName 
                 [gameId, roomName, startingTurn, hashedPwd, hashedMaster, 0, now, gameVersion, JSON.stringify(startingChina)]);
             
             const startingData = getStartingData(gameVersion);
-            const stmt = db.prepare('INSERT OR REPLACE INTO nations (game_id, name, income, bank, purchases, player_name, factories, research_tokens, tech, active_objectives) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)');
+            const stmt = db.prepare('INSERT OR REPLACE INTO nations (game_id, name, income, bank, purchases, player_name, factories, research_tokens, tech, active_objectives, capital_captured, tokens_rolled) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, 0)');
             startingData.forEach(data => {
                 stmt.run([gameId, data[0], data[1], data[2], JSON.stringify({}), '', JSON.stringify(data[3] || []), '[]', '[]']);
             });

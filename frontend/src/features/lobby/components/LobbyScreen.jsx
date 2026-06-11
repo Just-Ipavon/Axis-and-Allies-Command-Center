@@ -1,11 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Shield, Clock, Lock, Unlock, Trash2, X, PlusCircle, RefreshCw } from 'lucide-react';
+import { Shield, Clock, Lock, Unlock, Trash2, X, PlusCircle, RefreshCw, Sun, Moon } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { cn } from '../../../utils/styles';
 
 export default function LobbyScreen() {
   const { setGameId, availableRooms, fetchRooms, connected, deleteRoom } = useGameStore();
   const [directJoinId, setDirectJoinId] = useState('');
+
+  const [isDark, setIsDark] = useState(() => {
+    return document.documentElement.classList.contains('dark');
+  });
+
+  const toggleDarkMode = () => {
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('axis_darkmode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('axis_darkmode', 'false');
+    }
+  };
   
   // Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -108,9 +124,18 @@ export default function LobbyScreen() {
               </h2>
             </div>
           </div>
-          <div className="flex justify-center md:justify-end items-center gap-2 text-sm bg-black/5 border border-vintage-text/30 px-4 py-2 font-mono">
-            <span className={cn("w-3 h-3 rounded-full shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)]", connected ? "bg-green-500" : "bg-red-500")} />
-            <span className="font-bold">{connected ? "HQ SECURE LINK ESTABLISHED" : "LINK OFFLINE: RETRYING..."}</span>
+          <div className="flex flex-col sm:flex-row items-center justify-center md:justify-end gap-3">
+            <button 
+              onClick={toggleDarkMode}
+              className="p-2 border-2 border-vintage-text bg-vintage-bg shadow-[4px_4px_0_0_rgba(43,42,38,1)] hover:bg-vintage-bg/40 active:translate-y-[1px] active:translate-x-[1px] transition-all rounded"
+              title="Toggle Theme"
+            >
+              {isDark ? <Sun size={20} className="text-amber-500 shrink-0" /> : <Moon size={20} className="shrink-0" />}
+            </button>
+            <div className="flex justify-center md:justify-end items-center gap-2 text-sm bg-black/5 border border-vintage-text/30 px-4 py-2 font-mono h-[40px]">
+              <span className={cn("w-3 h-3 rounded-full shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)]", connected ? "bg-green-500" : "bg-red-500")} />
+              <span className="font-bold">{connected ? "HQ SECURE LINK ESTABLISHED" : "LINK OFFLINE: RETRYING..."}</span>
+            </div>
           </div>
         </div>
 

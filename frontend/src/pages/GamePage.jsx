@@ -6,7 +6,6 @@ import GameSidebar from '../features/game/components/GameSidebar';
 
 export default function GamePage() {
   const { 
-    gameId, 
     setGameId, 
     gameData, 
     nations, 

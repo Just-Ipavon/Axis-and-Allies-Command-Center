@@ -8,10 +8,10 @@ export default {
     extend: {
       colors: {
         vintage: {
-          bg: '#f4ecd8',        // warm paper
-          paper: '#e8dbb9',     // dark paper
-          text: '#2b2a26',      // faded black text
-          border: '#bda682',    // brown-ish border
+          bg: 'var(--vintage-bg)',        // warm paper
+          paper: 'var(--vintage-paper)',     // dark paper
+          text: 'var(--vintage-text)',      // faded black text
+          border: 'var(--vintage-border)',    // brown-ish border
           accent: '#8a2b2b'     // dark blood red
         },
         faction: {

@@ -30,6 +30,8 @@ const initDb = () => {
                 research_tokens INTEGER DEFAULT 0,
                 tech TEXT DEFAULT '[]',
                 active_objectives TEXT DEFAULT '[]',
+                capital_captured INTEGER DEFAULT 0,
+                tokens_rolled INTEGER DEFAULT 0,
                 PRIMARY KEY (game_id, name)
             )`);
 
@@ -42,22 +44,32 @@ const initDb = () => {
             )`);
             
             // Migrations / Upgrades
-            db.run("ALTER TABLE nations ADD COLUMN player_name TEXT", (err) => {});
-            db.run("ALTER TABLE nations ADD COLUMN factories TEXT", (err) => {});
-            db.run("ALTER TABLE nations ADD COLUMN purchases_locked INTEGER DEFAULT 0", (err) => {});
-            db.run("ALTER TABLE nations ADD COLUMN last_purchases TEXT", (err) => {});
-            db.run("ALTER TABLE nations ADD COLUMN research_tokens INTEGER DEFAULT 0", (err) => {});
-            db.run("ALTER TABLE nations ADD COLUMN tech TEXT DEFAULT '[]'", (err) => {});
-            db.run("ALTER TABLE nations ADD COLUMN active_objectives TEXT DEFAULT '[]'", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN password TEXT", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN master_password TEXT", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN play_time INTEGER DEFAULT 0", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN last_resume_at INTEGER", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN last_empty_at INTEGER", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN room_name TEXT", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN game_version TEXT DEFAULT '1942'", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN china_territories TEXT DEFAULT '[]'", (err) => {});
-            db.run("ALTER TABLE games ADD COLUMN china_reinforcements_placed INTEGER DEFAULT 0", (err) => {});
+            const runMigration = (query) => {
+                db.run(query, (err) => {
+                    if (err && !err.message.includes('duplicate column name')) {
+                        console.error(`[Migration Warning] Failed to execute query: "${query}". Error: ${err.message}`);
+                    }
+                });
+            };
+
+            runMigration("ALTER TABLE nations ADD COLUMN player_name TEXT");
+            runMigration("ALTER TABLE nations ADD COLUMN factories TEXT");
+            runMigration("ALTER TABLE nations ADD COLUMN purchases_locked INTEGER DEFAULT 0");
+            runMigration("ALTER TABLE nations ADD COLUMN last_purchases TEXT");
+            runMigration("ALTER TABLE nations ADD COLUMN research_tokens INTEGER DEFAULT 0");
+            runMigration("ALTER TABLE nations ADD COLUMN tech TEXT DEFAULT '[]'");
+            runMigration("ALTER TABLE nations ADD COLUMN active_objectives TEXT DEFAULT '[]'");
+            runMigration("ALTER TABLE nations ADD COLUMN capital_captured INTEGER DEFAULT 0");
+            runMigration("ALTER TABLE nations ADD COLUMN tokens_rolled INTEGER DEFAULT 0");
+            runMigration("ALTER TABLE games ADD COLUMN password TEXT");
+            runMigration("ALTER TABLE games ADD COLUMN master_password TEXT");
+            runMigration("ALTER TABLE games ADD COLUMN play_time INTEGER DEFAULT 0");
+            runMigration("ALTER TABLE games ADD COLUMN last_resume_at INTEGER");
+            runMigration("ALTER TABLE games ADD COLUMN last_empty_at INTEGER");
+            runMigration("ALTER TABLE games ADD COLUMN room_name TEXT");
+            runMigration("ALTER TABLE games ADD COLUMN game_version TEXT DEFAULT '1942'");
+            runMigration("ALTER TABLE games ADD COLUMN china_territories TEXT DEFAULT '[]'");
+            runMigration("ALTER TABLE games ADD COLUMN china_reinforcements_placed INTEGER DEFAULT 0");
 
             // Cleanup ghost sessions
             db.run("DELETE FROM games WHERE trim(id) = '' OR id IS NULL");

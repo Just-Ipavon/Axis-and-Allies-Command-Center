@@ -1,4 +1,5 @@
-import { Shield, Clock, LogOut, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import { Shield, Clock, LogOut, RotateCcw, Sun, Moon } from 'lucide-react';
 import { cn } from '../../../utils/styles';
 import { getTurnOrder } from '../../../constants/gameData';
 
@@ -26,6 +27,22 @@ export default function GameHeader({
   const version = gameData.game_version || '1942';
   const turnOrder = getTurnOrder(version);
   
+  const [isDark, setIsDark] = useState(() => {
+    return document.documentElement.classList.contains('dark');
+  });
+
+  const toggleDarkMode = () => {
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('axis_darkmode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('axis_darkmode', 'false');
+    }
+  };
+
   const getHeaderTitle = () => {
     if (version === 'anniversary_1941') return 'Axis & Allies Anniversary (1941)';
     if (version === 'anniversary_1942') return 'Axis & Allies Anniversary (1942)';
@@ -35,8 +52,8 @@ export default function GameHeader({
   return (
     <header className="flex flex-col md:flex-row justify-between items-center border-b-4 border-vintage-text pb-4 gap-4">
       <div>
-         <h1 className="text-4xl md:text-5xl flex items-center gap-2 mb-2 font-display uppercase tracking-wide">
-            <Shield className="w-10 h-10" />
+         <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl flex items-center gap-2 mb-2 font-display uppercase tracking-wide whitespace-nowrap">
+            <Shield className="w-8 h-8 md:w-10 md:h-10 shrink-0" />
             {getHeaderTitle()}
          </h1>
          
@@ -94,11 +111,21 @@ export default function GameHeader({
           </div>
       </div>
       
-       <div className="flex flex-col gap-3 items-end">
-           <div className="flex items-center gap-2 bg-black/80 text-amber-500 font-display text-2xl px-4 py-1 border-2 border-amber-500 shadow-[4px_4px_0_0_rgba(180,83,9,1)]">
-               <Clock size={20} className="text-amber-500" />
-               {timerDisplay}
-           </div>
+             <div className="flex flex-col gap-3 items-end">
+            <div className="flex gap-2 items-center">
+                <button 
+                  onClick={toggleDarkMode}
+                  className="p-2 border-2 border-vintage-text bg-vintage-paper shadow-[4px_4px_0_0_rgba(43,42,38,1)] hover:bg-vintage-bg/40 active:translate-y-[1px] active:translate-x-[1px] transition-all rounded"
+                  title="Toggle Theme"
+                >
+                  {isDark ? <Sun size={20} className="text-amber-500 shrink-0" /> : <Moon size={20} className="shrink-0" />}
+                </button>
+                
+                <div className="flex items-center gap-2 bg-black/80 text-amber-500 font-display text-2xl px-4 py-1 border-2 border-amber-500 shadow-[4px_4px_0_0_rgba(180,83,9,1)]">
+                    <Clock size={20} className="text-amber-500" />
+                    {timerDisplay}
+                </div>
+            </div>
 
            <div className="flex py-2 px-4 border-2 border-vintage-text bg-vintage-paper shadow-[4px_4px_0_0_rgba(43,42,38,1)]">
              <span className="font-bold mr-2 uppercase tracking-wide self-center">Role:</span>

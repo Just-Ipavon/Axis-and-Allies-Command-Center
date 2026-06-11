@@ -24,17 +24,19 @@
 
 ##  What is this app?
 
-**Axis & Allies: Command Center** is your digital assistant for tabletop matches of **Axis & Allies: 1942**. Say goodbye to pen, paper, and manual calculations! This app lets you and your friends focus on strategy by handling the complex math, economy, and logistics directly from your smartphones or tablets.
+**Axis & Allies: Command Center** is your digital hub and assistant for tabletop matches of various **Axis & Allies** editions (including **Axis & Allies: 1942 Second Edition** and **Axis & Allies: Anniversary Edition** with both 1941 and 1942 setups). Say goodbye to pen, paper, and manual calculations! This app lets you and your friends focus on strategy by handling the complex math, economy, and logistics directly from your smartphones or tablets.
 
 ### Key Features
 
-- **Smart Purchasing:** Buy units with ease. The app automatically calculates your remaining IPCs (money) and strictly enforces your factory production limits.
-- **Factory Exchanges:** When territories change hands on the board, simply transfer the factory to the conquering nation with a single tap. The system automatically adjusts incomes and updates production capacities for both players.
-- **Action Log:** Every purchase, combat result, and factory transfer is recorded in a global activity log. No more forgotten transactions or arguing over who bought what!
-- **Real-Time Sync:** See what your allies and enemies are doing instantly. The app updates everyone's screens in real-time as actions happen—no need to reload the page.
-- **Game Timer:** Keep track of how long your global war has been going on. If you need to stop your session, the timer completely saves your progress and resumes when you gather to play again.
-- **Direct Connect:** Join private/public rooms using the unique, 6-character hexadecimal Room ID (e.g. `#8FK2J1`).
-- **Automatic Turn Order:** The app automatically advances the turn order based on the game rules when income is collected.
+- **Multi-Edition Hub:** Play and track stats across different game versions (1942, Anniversary 1941, Anniversary 1942).
+- **Smart Purchasing:** Buy units with ease. The app automatically calculates remaining IPCs (money) based on active technologies (like *Improved Shipyards* for discounted ships) and strictly enforces production capacity limits.
+- **Technology & R&D:** Purchase research tokens, roll for breakthrough charts, or manually activate technologies. The app automatically updates unit stats (such as Jet Fighters or Super Submarines), increases factory capacity, and applies half-price repairs for *Increased Factory Production*.
+- **Sub-Factions (China):** Track control of Chinese territories and calculate mobilization allowance for infantry reinforcements.
+- **Factory Exchanges & Damage:** When territories change hands, transfer factories with a tap. Apply damage from bombing raids, or repair factories using IPCs.
+- **Action Log:** Every purchase, combat result, tech breakthrough, and factory transfer is recorded in a global activity log.
+- **Real-Time Sync:** Full-duplex WebSockets sync actions instantly across all players' screens—no need to reload.
+- **Game Timer:** Keep track of match duration. Game state and timer progress are fully saved to SQLite database.
+- **Automatic Turn Order:** Automatically advances to the next player's turn when income is collected, handling National Objectives bonuses.
 
 ---
 

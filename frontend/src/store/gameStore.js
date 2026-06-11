@@ -258,6 +258,12 @@ export const useGameStore = create((set, get) => ({
         gameSocket.emit('toggleNationalObjective', { gameId, name, objectiveId, isActive });
     },
 
+    toggleTechnology: (name, techName, isActive) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        gameSocket.emit('toggleTechnology', { gameId, name, techName, isActive });
+    },
+
     updateChinaTerritories: (territories) => {
         const { gameId } = get();
         if(!gameId) return;

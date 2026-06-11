@@ -2,13 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --vintage-bg: #f4ecd8;
+  --vintage-paper: #e8dbb9;
+  --vintage-text: #2b2a26;
+  --vintage-border: #bda682;
+  --bg-overlay: rgba(244, 236, 216, 0.8);
+}
+
+:root.dark {
+  --vintage-bg: #1d211a;
+  --vintage-paper: #2c3227;
+  --vintage-text: #eef3eb;
+  --vintage-border: #46503e;
+  --bg-overlay: rgba(29, 33, 26, 0.88);
+}
+
 @layer base {
   body {
     @apply bg-vintage-bg text-vintage-text font-typewriter min-h-screen;
-    background-image: linear-gradient(rgba(244, 236, 216, 0.8), rgba(244, 236, 216, 0.8)), url("./assets/bg-warroom.webp");
+    background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay)), url("./assets/bg-warroom.webp");
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   }
 
   h1, h2, h3, h4 {

@@ -10,6 +10,15 @@ function App() {
     initSocket();
   }, [initSocket]);
 
+  useEffect(() => {
+    const isDark = localStorage.getItem('axis_darkmode') === 'true';
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
   if (!gameId) {
     return <LobbyPage />;
   }

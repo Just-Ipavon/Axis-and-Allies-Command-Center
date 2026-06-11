@@ -38,7 +38,7 @@ export default function GameSidebar({ role, logs, verifyMasterPassword, resetGam
                   resetGame(pwd).catch((e) => alert(e.message));
                 }
               })
-              .catch((err) => alert('AUTHORIZATION DENIED.'));
+              .catch(() => alert('AUTHORIZATION DENIED.'));
           }}
           className="vintage-btn text-red-800 bg-red-100 flex justify-center items-center gap-2 mt-4"
         >

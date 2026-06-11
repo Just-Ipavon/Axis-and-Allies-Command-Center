@@ -121,6 +121,14 @@ module.exports = (io, socket) => {
         } catch(e) { console.error(e) }
     });
 
+    socket.on('toggleTechnology', async ({ gameId, name, techName, isActive }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.toggleTechnology(cleanGameId, truncateString(name, 50), truncateString(techName, 100), isActive);
+            await broadcastGameState(io, cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+
     socket.on('updateChinaTerritories', async ({ gameId, territories }) => {
         try {
             const cleanGameId = truncateString(gameId, 50);

@@ -102,8 +102,8 @@ const collectIncome = (gameId, name, logMessage) => {
                         });
                         stmt.finalize();
 
-                        // Force unlock all (redundant but safe)
-                        db.run('UPDATE nations SET purchases_locked = 0 WHERE game_id = ?', [gameId], () => {
+                        // Force unlock all and reset tokens_rolled count
+                        db.run('UPDATE nations SET purchases_locked = 0, tokens_rolled = 0 WHERE game_id = ?', [gameId], () => {
                             resolve(nextTurn);
                         });
                     });
@@ -139,8 +139,8 @@ const advanceTurn = (gameId) => {
                     });
                     stmt.finalize();
                     
-                    // Reset purchases_locked for all nations when turn advances
-                    db.run('UPDATE nations SET purchases_locked = 0 WHERE game_id = ?', [gameId], () => {
+                    // Reset purchases_locked and tokens_rolled count for all nations when turn advances
+                    db.run('UPDATE nations SET purchases_locked = 0, tokens_rolled = 0 WHERE game_id = ?', [gameId], () => {
                         resolve(nextTurn);
                     });
                 });
@@ -217,125 +217,6 @@ const toggleCapitalStatus = (gameId, name, isCaptured) => {
                     else resolve(true);
                 }
             );
-        });
-    });
-};
-
-const addFactory = (gameId, name, territoryName, capacity) => {
-    return new Promise((resolve, reject) => {
-        const id = Math.random().toString(36).substr(2, 9);
-        db.get('SELECT factories FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
-            if(err) return reject(err);
-            let f = [];
-            try { f = JSON.parse(row.factories || '[]'); } catch(e){}
-            f.push({ id, name: territoryName, capacity: parseInt(capacity), damage: 0, repairedThisTurn: 0 });
-            db.run('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?', [JSON.stringify(f), gameId, name], (e) => {
-                if(e) reject(e); else resolve(true);
-            });
-        });
-    });
-};
-
-const removeFactory = (gameId, name, factoryId) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT factories FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
-            if(err) return reject(err);
-            let f = [];
-            try { f = JSON.parse(row.factories || '[]'); } catch(e){}
-            f = f.filter(x => x.id !== factoryId);
-            db.run('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?', [JSON.stringify(f), gameId, name], (e) => {
-                if(e) reject(e); else resolve(true);
-            });
-        });
-    });
-};
-
-const updateFactoryDamage = (gameId, name, factoryId, damageDelta, isUndo = false, isFree = false) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT factories, bank FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
-            if(err) return reject(err);
-            let f = [];
-            let bank = row.bank;
-            try { f = JSON.parse(row.factories || '[]'); } catch(e){}
-            
-            const factory = f.find(x => x.id === factoryId);
-            if(!factory) return reject(new Error('Factory not found'));
-            
-            const cap = factory.capacity;
-            let newDamage = Math.max(0, Math.min(factory.damage + damageDelta, cap * 2));
-            
-            // If damageDelta < 0, it means REPAIR. It costs IPC and we track it
-            if (damageDelta < 0) {
-                if (!isFree) {
-                    const cost = factory.damage - newDamage;
-                    if (cost > 0) {
-                        if (bank < cost) return reject(new Error('Not enough Bank IPC to repair'));
-                        bank -= cost;
-                        factory.repairedThisTurn = (factory.repairedThisTurn || 0) + cost;
-                    }
-                }
-            } 
-            else if (damageDelta > 0 && isUndo) {
-                // If it's an undo, it adds damage back, but we refund if we repaired this turn
-                const addedDamage = newDamage - factory.damage;
-                if (addedDamage > 0) {
-                    const refundAmount = Math.min(addedDamage, factory.repairedThisTurn || 0);
-                    if (refundAmount < addedDamage) return reject(new Error('Cannot undo more damage than was repaired this turn'));
-                    bank += refundAmount;
-                    factory.repairedThisTurn -= refundAmount;
-                }
-            }
-            
-            factory.damage = newDamage;
-            
-            db.run('UPDATE nations SET factories = ?, bank = ? WHERE game_id = ? AND name = ?', [JSON.stringify(f), bank, gameId, name], (e) => {
-                if(e) reject(e); else resolve(true);
-            });
-        });
-    });
-};
-
-const transferFactory = (gameId, oldNation, newNation, factoryId) => {
-    return new Promise((resolve, reject) => {
-        if (oldNation === newNation) return resolve(true);
-        db.get('SELECT factories, income FROM nations WHERE game_id = ? AND name = ?', [gameId, oldNation], (err, victimRow) => {
-            if(err || !victimRow) return reject(err || new Error('Victim not found'));
-            
-            db.get('SELECT factories, income FROM nations WHERE game_id = ? AND name = ?', [gameId, newNation], (err, conquerorRow) => {
-                if(err || !conquerorRow) return reject(err || new Error('Conqueror not found'));
-                
-                let victimFactories = [];
-                try { victimFactories = JSON.parse(victimRow.factories || '[]'); } catch(e){}
-                let conquerorFactories = [];
-                try { conquerorFactories = JSON.parse(conquerorRow.factories || '[]'); } catch(e){}
-                
-                const factoryIndex = victimFactories.findIndex(x => x.id === factoryId);
-                if (factoryIndex === -1) return reject(new Error('Factory not found on victim'));
-                
-                const factory = victimFactories.splice(factoryIndex, 1)[0];
-                factory.repairedThisTurn = 0; // reset this
-                conquerorFactories.push(factory);
-                
-                const val = factory.capacity;
-                const victimNewIncome = Math.max(0, victimRow.income - val);
-                const conquerorNewIncome = conquerorRow.income + val;
-                
-                db.serialize(() => {
-                    db.run('UPDATE nations SET factories = ?, income = ? WHERE game_id = ? AND name = ?', 
-                        [JSON.stringify(victimFactories), victimNewIncome, gameId, oldNation]);
-                    db.run('UPDATE nations SET factories = ?, income = ? WHERE game_id = ? AND name = ?', 
-                        [JSON.stringify(conquerorFactories), conquerorNewIncome, gameId, newNation], (err) => {
-                        if (err) return reject(err);
-                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                            [gameId, `${newNation} conquered the factory in ${factory.name} from ${oldNation} (+${val} IPC).`], 
-                            (err) => {
-                                if (err) reject(err);
-                                else resolve(true);
-                            }
-                        );
-                    });
-                });
-            });
         });
     });
 };
@@ -463,164 +344,14 @@ const unlockPurchases = (gameId, name) => {
     });
 };
 
-// R&D Logic
-const buyTechToken = (gameId, name) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT bank, research_tokens FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
-            if (err || !nation) return reject(err || new Error('Nation not found'));
-            if (nation.bank < 5) return reject(new Error('Not enough IPCs to buy a Research Token'));
-            
-            const newBank = nation.bank - 5;
-            const newTokens = (nation.research_tokens || 0) + 1;
-            
-            db.serialize(() => {
-                db.run('UPDATE nations SET bank = ?, research_tokens = ? WHERE game_id = ? AND name = ?', [newBank, newTokens, gameId, name]);
-                db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, `${name} purchased a Research Token for 5 IPCs (Total Tokens: ${newTokens}).`], (err2) => {
-                    if (err2) reject(err2);
-                    else resolve(true);
-                });
-            });
-        });
-    });
-};
-
-const refundTechToken = (gameId, name) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT bank, research_tokens FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
-            if (err || !nation) return reject(err || new Error('Nation not found'));
-            if ((nation.research_tokens || 0) <= 0) return reject(new Error('No tokens to refund'));
-            
-            const newBank = nation.bank + 5;
-            const newTokens = nation.research_tokens - 1;
-            
-            db.serialize(() => {
-                db.run('UPDATE nations SET bank = ?, research_tokens = ? WHERE game_id = ? AND name = ?', [newBank, newTokens, gameId, name]);
-                db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, `${name} refunded a Research Token (Total Tokens: ${newTokens}).`], (err2) => {
-                    if (err2) reject(err2);
-                    else resolve(true);
-                });
-            });
-        });
-    });
-};
-
-const rollForTech = (gameId, name, chartId) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT research_tokens, tech FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
-            if (err || !nation) return reject(err || new Error('Nation not found'));
-            const tokens = nation.research_tokens || 0;
-            if (tokens <= 0) return reject(new Error('No Research Tokens available to roll'));
-
-            const CHART_TECHS = {
-                1: [
-                    'Advanced Artillery',
-                    'Rockets',
-                    'Paratroopers',
-                    'Increased Factory Production',
-                    'War Bonds',
-                    'Mechanized Infantry'
-                ],
-                2: [
-                    'Super Submarines',
-                    'Jet Fighters',
-                    'Improved Shipyards',
-                    'Radar',
-                    'Long-Range Aircraft',
-                    'Heavy Bombers'
-                ]
-            };
-
-            let ownedTechs = [];
-            try { ownedTechs = JSON.parse(nation.tech || '[]'); } catch(e){}
-
-            const availableTechs = CHART_TECHS[chartId].filter(t => !ownedTechs.includes(t));
-            if (availableTechs.length === 0) {
-                return reject(new Error(`All technologies on Chart ${chartId} have already been unlocked!`));
-            }
-
-            // Perform rolls
-            const rolls = [];
-            let success = false;
-            for (let i = 0; i < tokens; i++) {
-                const roll = Math.floor(Math.random() * 6) + 1;
-                rolls.push(roll);
-                if (roll === 6) {
-                    success = true;
-                }
-            }
-
-            db.serialize(() => {
-                if (success) {
-                    // Pick random unowned tech
-                    const randomTech = availableTechs[Math.floor(Math.random() * availableTechs.length)];
-                    ownedTechs.push(randomTech);
-                    
-                    db.run('UPDATE nations SET research_tokens = 0, tech = ? WHERE game_id = ? AND name = ?', [JSON.stringify(ownedTechs), gameId, name]);
-                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                        [gameId, `🔬 ${name} achieved a Technology Breakthrough on Chart ${chartId}! Rolled: [${rolls.join(', ')}] - SUCCESS! Unlocked: ${randomTech}.`], 
-                        (err2) => {
-                            if (err2) reject(err2);
-                            else resolve(true);
-                        }
-                    );
-                } else {
-                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                        [gameId, `🔬 ${name} rolled for technology on Chart ${chartId}. Rolled: [${rolls.join(', ')}] - FAILURE. (Tokens retained).`], 
-                        (err2) => {
-                            if (err2) reject(err2);
-                            else resolve(true);
-                        }
-                    );
-                }
-            });
-        });
-    });
-};
-
-const toggleNationalObjective = (gameId, name, objectiveId, isActive) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT active_objectives FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
-            if (err || !nation) return reject(err || new Error('Nation not found'));
-            
-            let objectives = [];
-            try { objectives = JSON.parse(nation.active_objectives || '[]'); } catch(e){}
-            
-            if (isActive) {
-                if (!objectives.includes(objectiveId)) {
-                    objectives.push(objectiveId);
-                }
-            } else {
-                objectives = objectives.filter(o => o !== objectiveId);
-            }
-            
-            db.run(
-                'UPDATE nations SET active_objectives = ? WHERE game_id = ? AND name = ?',
-                [JSON.stringify(objectives), gameId, name],
-                (err2) => {
-                    if (err2) reject(err2);
-                    else resolve(true);
-                }
-            );
-        });
-    });
-};
-
 module.exports = {
     getNations,
     updateNationStatus,
     collectIncome,
     advanceTurn,
     conquerTerritory,
-    addFactory,
-    removeFactory,
-    updateFactoryDamage,
-    transferFactory,
     undoTurn,
     lockPurchases,
     unlockPurchases,
-    toggleCapitalStatus,
-    buyTechToken,
-    refundTechToken,
-    rollForTech,
-    toggleNationalObjective
+    toggleCapitalStatus
 };
