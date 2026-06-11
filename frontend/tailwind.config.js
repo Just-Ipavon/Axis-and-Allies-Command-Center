@@ -19,7 +19,8 @@ export default {
           germany: '#404040',   // Dark gray
           uk: '#D2B48C',        // Tan
           japan: '#D2691E',     // Burnt Orange
-          usa: '#556B2F'        // Olive Drab
+          usa: '#556B2F',       // Olive Drab
+          italy: '#8b5a2b'      // Brown
         }
       },
       fontFamily: {

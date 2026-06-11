@@ -46,12 +46,13 @@ export default function GamePage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-        <GameMain role={role} nations={nations} />
+        <GameMain role={role} nations={nations} gameData={gameData} />
         <GameSidebar 
           role={role} 
           logs={logs} 
           verifyMasterPassword={verifyMasterPassword} 
           resetGame={resetGame} 
+          gameVersion={gameData.game_version || '1942'}
         />
       </div>
     </div>

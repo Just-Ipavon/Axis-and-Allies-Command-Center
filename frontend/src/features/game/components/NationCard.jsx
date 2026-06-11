@@ -11,10 +11,11 @@ const FLAG_MAP = {
   'UK': '/flags/British_large.png',
   'Japan': '/flags/Japanese_large.png',
   'USA': '/flags/Americans_large.png',
+  'Italy': '/flags/Italians_large.png',
 };
 
-export default function NationCard({ nation, isEditable }) {
-  const { updateNationBank, conquerTerritory, advanceTurn, collectIncome: collectIncomeStore, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases, toggleCapitalStatus } = useGameStore();
+export default function NationCard({ nation, isEditable, gameVersion }) {
+  const { updateNationBank, conquerTerritory, advanceTurn, collectIncome: collectIncomeStore, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases, toggleCapitalStatus, nations, buyTechToken, refundTechToken, rollForTech, toggleNationalObjective, updateChinaTerritories, mobilizeChinaInfantry, gameData } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
   const canCollect = isEditable && isMyTurn;
@@ -29,6 +30,8 @@ export default function NationCard({ nation, isEditable }) {
   const [transferVictim, setTransferVictim] = useState('');
   const [bombingRaidData, setBombingRaidData] = useState(null);
   const [bombingRaidValue, setBombingRaidValue] = useState(0);
+  const [openPanel, setOpenPanel] = useState(null);
+  const [chinaPlacements, setChinaPlacements] = useState({});
   
   // Local states to prevent input lag
   const [localPlayerName, setLocalPlayerName] = useState(nation.player_name || '');
@@ -61,10 +64,13 @@ export default function NationCard({ nation, isEditable }) {
           .catch(err => alert("Access Denied: " + err.message));
   };
 
-  const AXIS = ['Germany', 'Japan'];
+  const AXIS = ['Germany', 'Japan', 'Italy'];
   const ALLIES = ['USSR', 'UK', 'USA'];
   const isAxis = AXIS.includes(nation.name);
-  const enemyAlliance = isAxis ? ALLIES : AXIS;
+  const activeNations = (nations || []).map(n => n.name);
+  const activeAxis = AXIS.filter(name => activeNations.includes(name));
+  const activeAllies = ALLIES.filter(name => activeNations.includes(name));
+  const enemyAlliance = isAxis ? activeAllies : activeAxis;
 
   const handleIncomeChange = (amount) => {
     if (!isEditable || (purchasesLocked && !isBanker)) return;
@@ -222,12 +228,90 @@ export default function NationCard({ nation, isEditable }) {
        collectIncomeStore(nation.name, log);
    };
 
+  const NATION_OBJECTIVES = {
+      'USSR': [
+          { id: 'no_ussr_1', name: 'Archangelsk Security', desc: 'USSR controls Archangelsk (No Allied units in territory)', reward: 5 },
+          { id: 'no_ussr_2', name: 'Soviet Expansion', desc: 'USSR controls at least 3 territories originally controlled by Germany/Italy/Japan/Pro-Axis neutrals', reward: 10 }
+      ],
+      'Germany': [
+          { id: 'no_germany_1', name: 'Lebensraum', desc: 'Germany controls France, NW Europe, Poland, Baltic States, and Bulgaria/Romania', reward: 5 },
+          { id: 'no_germany_2', name: 'Eastern Front', desc: 'Germany controls Baltic States, East Poland, Belorussia, and Ukraine', reward: 5 },
+          { id: 'no_germany_3', name: 'Caucasus/Karelia Control', desc: 'Germany controls Caucasus and/or Karelia', reward: 5 }
+      ],
+      'UK': [
+          { id: 'no_uk_1', name: 'Japanese Territory Capture', desc: 'UK controls at least 1 territory originally controlled by Japan', reward: 5 },
+          { id: 'no_uk_2', name: 'British Empire Integrity', desc: 'UK controls Eastern Canada, Western Canada, Gibraltar, Egypt, Australia, and India', reward: 5 },
+          { id: 'no_uk_3', name: 'France/Balkans Liberation', desc: 'UK controls France and/or Balkans (liberated)', reward: 5 }
+      ],
+      'Japan': [
+          { id: 'no_japan_1', name: 'Greater East Asia Co-Prosperity Sphere', desc: 'Japan controls at least 10 territories originally controlled by China/Allies/Neutrals', reward: 5 },
+          { id: 'no_japan_2', name: 'Pacific Islands Hegemony', desc: 'Japan controls at least 3 Allied island groups', reward: 5 },
+          { id: 'no_japan_3', name: 'India/Australia/Hawaii Control', desc: 'Japan controls India, Australia, and/or Hawaiian Islands', reward: 5 }
+      ],
+      'USA': [
+          { id: 'no_usa_1', name: 'Pacific Security Zone', desc: 'USA controls Hawaiian Islands, Midway, Johnston Island, Palmyra, and Wake Island', reward: 5 },
+          { id: 'no_usa_2', name: 'Western Hemisphere Security', desc: 'USA controls Central America, West Indies, and Colombia/Venezuela', reward: 5 },
+          { id: 'no_usa_3', name: 'Liberation of France', desc: 'USA controls France (liberated)', reward: 5 }
+      ],
+      'Italy': [
+          { id: 'no_italy_1', name: 'Mediterranean Dominance', desc: 'No Allied surface warships in Mediterranean (Sea Zones 13-16)', reward: 5 },
+          { id: 'no_italy_2', name: 'Roman Empire Revival', desc: 'Italy controls Gibraltar, Egypt, and/or Greece', reward: 5 }
+      ]
+  }[nation.name] || [];
+
+  const TECH_CHART_1 = [
+      'Advanced Artillery',
+      'Rockets',
+      'Paratroopers',
+      'Increased Factory Production',
+      'War Bonds',
+      'Mechanized Infantry'
+  ];
+  const TECH_CHART_2 = [
+      'Super Submarines',
+      'Jet Fighters',
+      'Improved Shipyards',
+      'Radar',
+      'Long-Range Aircraft',
+      'Heavy Bombers'
+  ];
+  const CHINA_TERRITORIES_LIST = ['Kiangsu', 'Hopei', 'Szechwan', 'Yunnan', 'Kwangtung'];
+
+  const chinaControlledCount = gameData?.china_territories?.length || 0;
+  const chinaInfantryAllowed = chinaControlledCount > 0 ? Math.max(1, Math.ceil(chinaControlledCount / 2)) : 0;
+
+  const handleChinaPlacementChange = (territory, delta) => {
+      const currentPlaced = Object.values(chinaPlacements).reduce((sum, q) => sum + q, 0);
+      const currentQty = chinaPlacements[territory] || 0;
+      const newQty = currentQty + delta;
+      if (newQty < 0) return;
+      if (delta > 0 && currentPlaced >= chinaInfantryAllowed) {
+          alert(`You can only place up to ${chinaInfantryAllowed} infantry!`);
+          return;
+      }
+      setChinaPlacements({ ...chinaPlacements, [territory]: newQty });
+  };
+
+  const handleChinaMobilize = () => {
+      const currentPlaced = Object.values(chinaPlacements).reduce((sum, q) => sum + q, 0);
+      if (currentPlaced < chinaInfantryAllowed) {
+          if (!window.confirm(`You have only placed ${currentPlaced} out of ${chinaInfantryAllowed} allowed infantry. Proceed?`)) {
+              return;
+          }
+      }
+      mobilizeChinaInfantry(chinaPlacements);
+      setChinaPlacements({});
+  };
+
+  const isAnniversary = gameVersion && gameVersion.startsWith('anniversary');
+
   const colorClasses = {
       'USSR': 'bg-faction-ussr text-white border-vintage-text',
       'Germany': 'bg-faction-germany text-white border-vintage-text',
       'UK': 'bg-faction-uk text-black border-vintage-text',
       'Japan': 'bg-faction-japan text-white border-vintage-text',
       'USA': 'bg-faction-usa text-white border-vintage-text',
+      'Italy': 'bg-faction-italy text-white border-vintage-text',
   }[nation.name] || 'bg-vintage-paper';
 
   return (
@@ -329,7 +413,7 @@ export default function NationCard({ nation, isEditable }) {
                    <div className="font-bold mt-2 mb-1 uppercase text-xs opacity-80">Original Owner (If liberating)</div>
                    <select value={battleLiberatedFor} onChange={e=>setBattleLiberatedFor(e.target.value)} className="w-full text-black px-2 py-1 font-bold outline-none cursor-pointer">
                       <option value="">-- Self --</option>
-                      {(isAxis ? AXIS : ALLIES).filter(n=>n!==nation.name).map(n => <option key={n} value={n}>{n}</option>)}
+                      {(isAxis ? activeAxis : activeAllies).filter(n=>n!==nation.name).map(n => <option key={n} value={n}>{n}</option>)}
                    </select>
                    <div className="flex gap-2 mt-4">
                        <button onClick={handleConquer} className="flex-1 bg-green-700 text-white shadow-sm border border-black font-bold py-2 uppercase hover:bg-green-600 active:scale-95 text-xs">Confirm</button>
@@ -532,6 +616,259 @@ export default function NationCard({ nation, isEditable }) {
                 {factories.length === 0 && <div className="italic opacity-60 text-xs text-center border-t border-b border-dashed border-current py-1 my-1">No production sites.</div>}
         </div>
       </div>
+
+      {/* Anniversary Edition Features Panel */}
+      {isAnniversary && (
+          <div className="mt-4 border-t border-current/20 pt-4 flex flex-col gap-2">
+              <div className="flex gap-2">
+                  <button 
+                      onClick={() => setOpenPanel(openPanel === 'tech' ? null : 'tech')}
+                      className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1", 
+                          openPanel === 'tech' ? "bg-amber-500 text-black font-black" : "bg-black/10 hover:bg-black/20")}
+                  >
+                      🔬 Tech R&D ({(nation.tech || []).length})
+                  </button>
+                  <button 
+                      onClick={() => setOpenPanel(openPanel === 'objectives' ? null : 'objectives')}
+                      className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1", 
+                          openPanel === 'objectives' ? "bg-amber-500 text-black font-black" : "bg-black/10 hover:bg-black/20")}
+                  >
+                      🏆 Objectives ({(nation.active_objectives || []).length}/{NATION_OBJECTIVES.length})
+                  </button>
+                  {nation.name === 'USA' && (
+                      <button 
+                          onClick={() => setOpenPanel(openPanel === 'china' ? null : 'china')}
+                          className={cn("flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 px-2 border border-current shadow-sm flex items-center justify-center gap-1", 
+                              openPanel === 'china' ? "bg-red-800 text-white font-black" : "bg-black/10 hover:bg-black/20")}
+                      >
+                          🇨🇳 China ({chinaControlledCount})
+                      </button>
+                  )}
+              </div>
+
+              {/* R&D Sub-Panel */}
+              {openPanel === 'tech' && (
+                  <div className="bg-black/20 p-3 border border-current/20 flex flex-col gap-3">
+                      <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold uppercase text-left">Research Tokens: {nation.research_tokens || 0}</span>
+                          {isEditable && (
+                              <div className="flex gap-1">
+                                  <button 
+                                      onClick={() => buyTechToken(nation.name)} 
+                                      disabled={nation.bank < 5}
+                                      className="text-[9px] bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white font-bold py-1 px-2 uppercase shadow-sm border border-black"
+                                  >
+                                      Buy (+1 Token: 5 IPC)
+                                  </button>
+                                  {(nation.research_tokens || 0) > 0 && (
+                                      <button 
+                                          onClick={() => refundTechToken(nation.name)}
+                                          className="text-[9px] bg-red-800 hover:bg-red-700 text-white font-bold py-1 px-2 uppercase shadow-sm border border-black"
+                                      >
+                                          Refund
+                                      </button>
+                                  )}
+                              </div>
+                          )}
+                      </div>
+
+                      {isEditable && (nation.research_tokens || 0) > 0 && (
+                          <div className="flex gap-2">
+                              <button 
+                                  onClick={() => {
+                                      if(window.confirm("Roll for breakthrough on Chart 1?")) {
+                                          rollForTech(nation.name, 1);
+                                      }
+                                  }}
+                                  className="flex-1 text-[10px] bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 px-2 uppercase shadow-sm border border-black"
+                              >
+                                  Roll Chart 1 (Land/Prod)
+                              </button>
+                              <button 
+                                  onClick={() => {
+                                      if(window.confirm("Roll for breakthrough on Chart 2?")) {
+                                          rollForTech(nation.name, 2);
+                                      }
+                                  }}
+                                  className="flex-1 text-[10px] bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 px-2 uppercase shadow-sm border border-black"
+                              >
+                                  Roll Chart 2 (Air/Sea)
+                              </button>
+                          </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4 mt-1">
+                          <div>
+                              <div className="text-[10px] font-bold uppercase border-b border-current/20 pb-1 mb-1.5 opacity-80 text-left">Chart 1: Land & Production</div>
+                              <div className="flex flex-col gap-1 text-[11px]">
+                                  {TECH_CHART_1.map((t, idx) => {
+                                      const hasIt = (nation.tech || []).includes(t);
+                                      return (
+                                          <div key={t} className={cn("px-1.5 py-0.5 border flex items-center gap-1.5 text-left", 
+                                              hasIt ? "bg-green-700/45 border-green-500 text-white font-bold" : "bg-black/10 border-transparent opacity-60")}>
+                                              <span className="font-mono text-[9px]">{idx + 1}.</span>
+                                              <span>{t}</span>
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+                          <div>
+                              <div className="text-[10px] font-bold uppercase border-b border-current/20 pb-1 mb-1.5 opacity-80 text-left">Chart 2: Air & Sea</div>
+                              <div className="flex flex-col gap-1 text-[11px]">
+                                  {TECH_CHART_2.map((t, idx) => {
+                                      const hasIt = (nation.tech || []).includes(t);
+                                      return (
+                                          <div key={t} className={cn("px-1.5 py-0.5 border flex items-center gap-1.5 text-left", 
+                                              hasIt ? "bg-green-700/45 border-green-500 text-white font-bold" : "bg-black/10 border-transparent opacity-60")}>
+                                              <span className="font-mono text-[9px]">{idx + 1}.</span>
+                                              <span>{t}</span>
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {/* National Objectives Sub-Panel */}
+              {openPanel === 'objectives' && (
+                  <div className="bg-black/20 p-3 border border-current/20 flex flex-col gap-2.5">
+                      <div className="text-xs font-bold uppercase border-b border-current/20 pb-1 text-left">National Objectives & Minor Bonuses</div>
+                      <div className="flex flex-col gap-2">
+                          {NATION_OBJECTIVES.map(obj => {
+                              const activeObjectives = nation.active_objectives || [];
+                              const isChecked = activeObjectives.includes(obj.id);
+                              return (
+                                  <label key={obj.id} className={cn("flex gap-3 items-start p-2 border cursor-pointer hover:bg-black/10 transition-colors text-left", 
+                                      isChecked ? "bg-amber-400/20 border-amber-500/50" : "bg-black/5 border-transparent opacity-75")}>
+                                      <input 
+                                          type="checkbox" 
+                                          checked={isChecked} 
+                                          disabled={!isEditable}
+                                          onChange={(e) => {
+                                              if(!isEditable) return;
+                                              toggleNationalObjective(nation.name, obj.id, e.target.checked);
+                                          }}
+                                          className="w-4 h-4 accent-amber-500 shrink-0 mt-0.5"
+                                      />
+                                      <div className="flex-1 flex flex-col leading-tight min-w-0">
+                                          <div className="flex justify-between items-baseline gap-2">
+                                              <span className="font-bold text-[11px] truncate">{obj.name}</span>
+                                              <span className="text-[10px] font-black text-amber-500 whitespace-nowrap">+{obj.reward} IPC</span>
+                                          </div>
+                                          <span className="text-[9px] opacity-70 mt-0.5 leading-snug">{obj.desc}</span>
+                                      </div>
+                                  </label>
+                              );
+                          })}
+                          {NATION_OBJECTIVES.length === 0 && (
+                              <div className="italic text-xs text-center py-2 opacity-60">No custom objectives found.</div>
+                          )}
+                      </div>
+                  </div>
+              )}
+
+              {/* China Faction Sub-Panel */}
+              {openPanel === 'china' && nation.name === 'USA' && (
+                  <div className="bg-black/20 p-3 border border-current/20 flex flex-col gap-3">
+                      <div className="text-xs font-bold uppercase border-b border-current/20 pb-1 flex justify-between items-center">
+                          <span>🇨🇳 Chinese Reinforcements Registry</span>
+                          <span className="text-[9px] bg-red-800 text-white px-1.5 py-0.5 rounded">Sub-Faction</span>
+                      </div>
+
+                      <div>
+                          <div className="text-[10px] font-bold uppercase opacity-85 mb-1.5 text-left">Control Map:</div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                              {CHINA_TERRITORIES_LIST.map(terr => {
+                                  const list = gameData?.china_territories || [];
+                                  const controlled = list.includes(terr);
+                                  return (
+                                      <label key={terr} className={cn("flex items-center gap-2 px-2 py-1 border text-[11px] cursor-pointer hover:bg-black/10 transition-colors text-left", 
+                                          controlled ? "bg-red-850/30 border-red-500/40 text-red-100 font-bold" : "bg-black/10 border-transparent opacity-60")}>
+                                          <input 
+                                              type="checkbox" 
+                                              checked={controlled}
+                                              disabled={!isEditable}
+                                              onChange={(e) => {
+                                                  if(!isEditable) return;
+                                                  let newList = [...list];
+                                                  if (e.target.checked) {
+                                                      if (!newList.includes(terr)) newList.push(terr);
+                                                  } else {
+                                                      newList = newList.filter(t => t !== terr);
+                                                  }
+                                                  updateChinaTerritories(newList);
+                                              }}
+                                              className="w-3.5 h-3.5 accent-red-700 shrink-0"
+                                          />
+                                          <span>{terr}</span>
+                                      </label>
+                                  );
+                              })}
+                          </div>
+                      </div>
+
+                      <div className="flex bg-black/10 p-2 justify-between items-center rounded-sm text-xs border border-white/5">
+                          <div className="flex flex-col text-left">
+                              <span className="font-bold">China Mobilization Allowance:</span>
+                              <span className="text-[9px] opacity-70">1 Inf / 2 territories (Min 1 if control ≥ 1)</span>
+                          </div>
+                          <span className="text-lg font-display font-bold text-red-400">{chinaInfantryAllowed} Infantry</span>
+                      </div>
+
+                      {chinaInfantryAllowed > 0 && (
+                          <div className="flex flex-col gap-2 mt-1">
+                              {gameData?.china_reinforcements_placed ? (
+                                  <div className="text-center font-bold text-green-400 text-xs py-2 bg-green-950/20 border border-green-500/30 uppercase tracking-wider rounded-sm">
+                                      ✓ Reinforcements Mobilized for this turn cycle
+                                  </div>
+                              ) : (
+                                  <>
+                                      <div className="text-[10px] font-bold uppercase opacity-85 text-left">Place Reinforcements:</div>
+                                      <div className="flex flex-col gap-1">
+                                          {(gameData?.china_territories || []).map(terr => {
+                                              const qty = chinaPlacements[terr] || 0;
+                                              return (
+                                                  <div key={terr} className="flex justify-between items-center bg-black/15 py-1 px-2 rounded-sm text-xs">
+                                                      <span className="font-medium">{terr}</span>
+                                                      {isEditable ? (
+                                                          <div className="flex items-center gap-1.5">
+                                                              <button 
+                                                                  onClick={() => handleChinaPlacementChange(terr, -1)}
+                                                                  className="w-5 h-5 bg-black/30 flex items-center justify-center hover:bg-black/50 active:scale-95"
+                                                              >-</button>
+                                                              <span className="font-bold w-4 text-center">{qty || ''}</span>
+                                                              <button 
+                                                                  onClick={() => handleChinaPlacementChange(terr, 1)}
+                                                                  className="w-5 h-5 bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-95"
+                                                              >+</button>
+                                                          </div>
+                                                      ) : (
+                                                          <span className="font-bold">x{qty}</span>
+                                                      )}
+                                                  </div>
+                                              );
+                                          })}
+                                      </div>
+                                      {isEditable && (
+                                          <button 
+                                              onClick={handleChinaMobilize}
+                                              disabled={Object.values(chinaPlacements).reduce((sum, q) => sum + q, 0) === 0}
+                                              className="mt-1 w-full bg-red-800 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2 uppercase shadow-sm border border-black text-xs active:scale-95 transition-transform"
+                                          >
+                                              Mobilize China Infantry
+                                          </button>
+                                      )}
+                                  </>
+                              )}
+                          </div>
+                      )}
+                  </div>
+              )}
+          </div>
+      )}
 
       {isEditable && (
           <div className="pt-2 border-t-2 border-current/30 mt-auto flex justify-between gap-2 items-stretch min-h-[3rem]">

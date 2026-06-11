@@ -43,13 +43,14 @@ module.exports = (io, socket, lobbyIo) => {
                 }
                 
                 const roomName = data.roomName || 'Unknown Operation';
+                const gameVersion = data.gameVersion || '1942';
                 const existingByName = await db.getGameByRoomName(roomName);
                 if (existingByName) {
                     if (typeof callback === 'function') callback({ error: 'A room with this name already exists.' });
                     return;
                 }
 
-                await db.createOrResetGame(gameId, password, masterPassword, roomName);
+                await db.createOrResetGame(gameId, password, masterPassword, roomName, gameVersion);
                 if (lobbyIo) lobbyIo.emit('roomsUpdated');
             } else {
                 if (isCreating) {
@@ -104,7 +105,7 @@ module.exports = (io, socket, lobbyIo) => {
             const cleanGameId = truncateString(gameId, 50);
             await db.verifyMasterPassword(cleanGameId, truncateString(masterPassword, 50));
             const game = await db.getGame(cleanGameId);
-            await db.createOrResetGame(cleanGameId, "", truncateString(masterPassword, 50), game ? game.room_name : 'Unknown Operation'); 
+            await db.createOrResetGame(cleanGameId, "", truncateString(masterPassword, 50), game ? game.room_name : 'Unknown Operation', game ? game.game_version : '1942'); 
             if (lobbyIo) lobbyIo.emit('roomsUpdated');
             await broadcastGameState(io, cleanGameId);
             if (typeof callback === 'function') callback({ success: true });

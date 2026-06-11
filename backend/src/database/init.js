@@ -12,7 +12,10 @@ const initDb = () => {
                 master_password TEXT,
                 play_time INTEGER DEFAULT 0,
                 last_resume_at INTEGER,
-                last_empty_at INTEGER
+                last_empty_at INTEGER,
+                game_version TEXT DEFAULT '1942',
+                china_territories TEXT DEFAULT '[]',
+                china_reinforcements_placed INTEGER DEFAULT 0
             )`);
 
             // Nations table
@@ -24,6 +27,9 @@ const initDb = () => {
                 purchases TEXT,
                 player_name TEXT,
                 factories TEXT,
+                research_tokens INTEGER DEFAULT 0,
+                tech TEXT DEFAULT '[]',
+                active_objectives TEXT DEFAULT '[]',
                 PRIMARY KEY (game_id, name)
             )`);
 
@@ -40,12 +46,18 @@ const initDb = () => {
             db.run("ALTER TABLE nations ADD COLUMN factories TEXT", (err) => {});
             db.run("ALTER TABLE nations ADD COLUMN purchases_locked INTEGER DEFAULT 0", (err) => {});
             db.run("ALTER TABLE nations ADD COLUMN last_purchases TEXT", (err) => {});
+            db.run("ALTER TABLE nations ADD COLUMN research_tokens INTEGER DEFAULT 0", (err) => {});
+            db.run("ALTER TABLE nations ADD COLUMN tech TEXT DEFAULT '[]'", (err) => {});
+            db.run("ALTER TABLE nations ADD COLUMN active_objectives TEXT DEFAULT '[]'", (err) => {});
             db.run("ALTER TABLE games ADD COLUMN password TEXT", (err) => {});
             db.run("ALTER TABLE games ADD COLUMN master_password TEXT", (err) => {});
             db.run("ALTER TABLE games ADD COLUMN play_time INTEGER DEFAULT 0", (err) => {});
             db.run("ALTER TABLE games ADD COLUMN last_resume_at INTEGER", (err) => {});
             db.run("ALTER TABLE games ADD COLUMN last_empty_at INTEGER", (err) => {});
             db.run("ALTER TABLE games ADD COLUMN room_name TEXT", (err) => {});
+            db.run("ALTER TABLE games ADD COLUMN game_version TEXT DEFAULT '1942'", (err) => {});
+            db.run("ALTER TABLE games ADD COLUMN china_territories TEXT DEFAULT '[]'", (err) => {});
+            db.run("ALTER TABLE games ADD COLUMN china_reinforcements_placed INTEGER DEFAULT 0", (err) => {});
 
             // Cleanup ghost sessions
             db.run("DELETE FROM games WHERE trim(id) = '' OR id IS NULL");

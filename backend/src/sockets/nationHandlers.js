@@ -88,4 +88,52 @@ module.exports = (io, socket) => {
             await broadcastGameState(io, cleanGameId);
         } catch(e) { console.error(e) }
     });
+
+    socket.on('buyTechToken', async ({ gameId, name }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.buyTechToken(cleanGameId, truncateString(name, 50));
+            await broadcastGameState(io, cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+
+    socket.on('refundTechToken', async ({ gameId, name }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.refundTechToken(cleanGameId, truncateString(name, 50));
+            await broadcastGameState(io, cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+
+    socket.on('rollForTech', async ({ gameId, name, chartId }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.rollForTech(cleanGameId, truncateString(name, 50), chartId);
+            await broadcastGameState(io, cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+
+    socket.on('toggleNationalObjective', async ({ gameId, name, objectiveId, isActive }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.toggleNationalObjective(cleanGameId, truncateString(name, 50), truncateString(objectiveId, 100), isActive);
+            await broadcastGameState(io, cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+
+    socket.on('updateChinaTerritories', async ({ gameId, territories }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.updateChinaTerritories(cleanGameId, territories);
+            await broadcastGameState(io, cleanGameId);
+        } catch(e) { console.error(e) }
+    });
+
+    socket.on('mobilizeChinaInfantry', async ({ gameId, placements }) => {
+        try {
+            const cleanGameId = truncateString(gameId, 50);
+            await db.mobilizeChinaInfantry(cleanGameId, placements);
+            await broadcastGameState(io, cleanGameId);
+        } catch(e) { console.error(e) }
+    });
 };

@@ -1,6 +1,6 @@
 import { RotateCcw } from 'lucide-react';
 
-export default function GameSidebar({ role, logs, verifyMasterPassword, resetGame }) {
+export default function GameSidebar({ role, logs, verifyMasterPassword, resetGame, gameVersion }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="border-2 border-vintage-text bg-vintage-paper p-4 shadow-[4px_4px_0_0_rgba(43,42,38,1)] flex flex-col h-[600px]">
@@ -23,7 +23,7 @@ export default function GameSidebar({ role, logs, verifyMasterPassword, resetGam
         </div>
       </div>
 
-      {role === 'banker' && (
+      {(role === 'banker' || (gameVersion && gameVersion.startsWith('anniversary'))) && (
         <button
           onClick={() => {
             const pwd = prompt('Enter Master Password to authorize complete Server Data Wipe:');

@@ -1,17 +1,20 @@
 import NationCard from './NationCard';
 import MiniNationCard from './MiniNationCard';
-import { TURN_ORDER } from '../../../constants/gameData';
+import { getTurnOrder } from '../../../constants/gameData';
 
-export default function GameMain({ role, nations }) {
+export default function GameMain({ role, nations, gameData }) {
+  const version = gameData.game_version || '1942';
+  const turnOrder = getTurnOrder(version);
+
   return (
     <div className="lg:col-span-3 flex flex-col gap-6">
       {/* If Banker: Show Grid of All Full Cards */}
       {role === 'banker' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 items-start">
-          {nations
-            .sort((a, b) => TURN_ORDER.indexOf(a.name) - TURN_ORDER.indexOf(b.name))
+          {[...nations]
+            .sort((a, b) => turnOrder.indexOf(a.name) - turnOrder.indexOf(b.name))
             .map((nation) => (
-              <NationCard key={nation.name} nation={nation} isEditable={true} />
+              <NationCard key={nation.name} nation={nation} isEditable={true} gameVersion={version} />
             ))}
         </div>
       )}
@@ -23,7 +26,7 @@ export default function GameMain({ role, nations }) {
             {nations
               .filter((n) => n.name === role)
               .map((nation) => (
-                <NationCard key={nation.name} nation={nation} isEditable={true} />
+                <NationCard key={nation.name} nation={nation} isEditable={true} gameVersion={version} />
               ))}
           </div>
 
@@ -35,7 +38,7 @@ export default function GameMain({ role, nations }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {nations
                   .filter((n) => n.name !== role)
-                  .sort((a, b) => TURN_ORDER.indexOf(a.name) - TURN_ORDER.indexOf(b.name))
+                  .sort((a, b) => turnOrder.indexOf(a.name) - turnOrder.indexOf(b.name))
                   .map((nation) => (
                     <MiniNationCard key={nation.name} nation={nation} />
                   ))}

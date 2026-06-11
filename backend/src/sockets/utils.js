@@ -16,13 +16,24 @@ async function broadcastGameState(io, gameId) {
 
         if (!game) return;
 
+        // Parse China territories for the game
+        let parsedChinaTerritories = [];
+        try {
+            parsedChinaTerritories = JSON.parse(game.china_territories || '[]');
+        } catch(e) {}
+
         io.to(gameId).emit('gameState', {
-            game,
+            game: {
+                ...game,
+                china_territories: parsedChinaTerritories
+            },
             currentTurn: game.current_turn,
             nations: nations.map(n => ({ 
                 ...n, 
                 purchases: JSON.parse(n.purchases || '{}'),
-                factories: JSON.parse(n.factories || '[]')
+                factories: JSON.parse(n.factories || '[]'),
+                tech: JSON.parse(n.tech || '[]'),
+                active_objectives: JSON.parse(n.active_objectives || '[]')
             })),
             logs: logs.reverse()
         });

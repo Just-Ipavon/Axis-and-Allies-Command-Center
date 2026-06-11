@@ -1,6 +1,14 @@
-export const TURN_ORDER = ['USSR', 'Germany', 'UK', 'Japan', 'USA'];
+export const TURN_ORDER_1942 = ['USSR', 'Germany', 'UK', 'Japan', 'USA'];
+export const TURN_ORDER_ANNIVERSARY_1941 = ['Germany', 'USSR', 'Japan', 'UK', 'Italy', 'USA'];
+export const TURN_ORDER_ANNIVERSARY_1942 = ['Japan', 'USSR', 'Germany', 'UK', 'Italy', 'USA'];
 
-// Unit costs standard for 1942 2nd Edition
+export const getTurnOrder = (version) => {
+  if (version === 'anniversary_1941') return TURN_ORDER_ANNIVERSARY_1941;
+  if (version === 'anniversary_1942') return TURN_ORDER_ANNIVERSARY_1942;
+  return TURN_ORDER_1942;
+};
+
+// Unit costs standard for 1942 2nd Edition and Anniversary Edition
 export const UNITS = {
   'Infantry': { cost: 3, a: 1, d: 2, m: 1 },
   'Artillery': { cost: 4, a: 2, d: 2, m: 1 },

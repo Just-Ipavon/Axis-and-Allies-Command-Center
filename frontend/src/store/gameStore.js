@@ -232,5 +232,41 @@ export const useGameStore = create((set, get) => ({
         const { gameId } = get();
         if(!gameId) return;
         gameSocket.emit('toggleCapitalStatus', { gameId, name, isCaptured });
+    },
+
+    buyTechToken: (name) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        gameSocket.emit('buyTechToken', { gameId, name });
+    },
+
+    refundTechToken: (name) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        gameSocket.emit('refundTechToken', { gameId, name });
+    },
+
+    rollForTech: (name, chartId) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        gameSocket.emit('rollForTech', { gameId, name, chartId });
+    },
+
+    toggleNationalObjective: (name, objectiveId, isActive) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        gameSocket.emit('toggleNationalObjective', { gameId, name, objectiveId, isActive });
+    },
+
+    updateChinaTerritories: (territories) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        gameSocket.emit('updateChinaTerritories', { gameId, territories });
+    },
+
+    mobilizeChinaInfantry: (placements) => {
+        const { gameId } = get();
+        if(!gameId) return;
+        gameSocket.emit('mobilizeChinaInfantry', { gameId, placements });
     }
 }));
