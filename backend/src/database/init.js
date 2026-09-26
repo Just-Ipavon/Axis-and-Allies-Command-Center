@@ -78,10 +78,11 @@ const initDb = () => {
             // Cleanup ghost sessions
             db.run("DELETE FROM games WHERE trim(id) = '' OR id IS NULL");
             db.run("DELETE FROM nations WHERE trim(game_id) = '' OR game_id IS NULL");
-            db.run("DELETE FROM logs WHERE trim(game_id) = '' OR game_id IS NULL");
-
-            console.log('Database tables initialized and cleaned.');
-            resolve();
+            // Serialized: runs after every statement above has completed.
+            db.run("DELETE FROM logs WHERE trim(game_id) = '' OR game_id IS NULL", () => {
+                console.log('Database tables initialized and cleaned.');
+                resolve();
+            });
         });
     });
 };

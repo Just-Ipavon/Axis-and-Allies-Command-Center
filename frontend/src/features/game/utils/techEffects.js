@@ -1,18 +1,16 @@
 import { UNITS } from '../../../constants/gameData';
 
-export const getUnitCost = (unitName, techArray) => {
-  const baseCost = UNITS[unitName].cost;
-  if (Array.isArray(techArray) && techArray.includes('Improved Shipyards')) {
-    if (unitName === 'Battleship' || unitName === 'Carrier' || unitName === 'Cruiser') {
-      return Math.max(1, baseCost - 3);
-    }
-    if (unitName === 'Destroyer' || unitName === 'Submarine' || unitName === 'Transport') {
-      return Math.max(1, baseCost - 1);
-    }
-  }
-  return baseCost;
-};
+// Cost and capacity rules are shared with the server.
+export {
+  getUnitCost,
+  getFactoryProductionBonus,
+  getCartCapacity,
+  getRepairCost,
+  countMobilizedUnits,
+  repairKey,
+} from '../../../../../shared/gameRules.mjs';
 
+// Unit stats as displayed in the mobilization list, including tech upgrades.
 export const getUnitStats = (unitName, techArray) => {
   const baseUnit = UNITS[unitName];
   let attack = baseUnit.a;
@@ -42,7 +40,3 @@ export const getUnitStats = (unitName, techArray) => {
 
   return { a: attack, d: defense, m: movement };
 };
-
-// Increased Factory Production (AA50): +2 units only for complexes in territories worth 3+ IPCs.
-export const getFactoryProductionBonus = (factory, hasIncreasedProd) =>
-  hasIncreasedProd && parseInt(factory.capacity || 0, 10) >= 3 ? 2 : 0;

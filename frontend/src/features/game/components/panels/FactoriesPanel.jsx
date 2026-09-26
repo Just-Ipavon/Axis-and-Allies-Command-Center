@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { Flag, Trash2 } from 'lucide-react';
 import { cn } from '../../../../utils/styles';
-import { getFactoryProductionBonus } from '../../utils/techEffects';
+import { getFactoryProductionBonus, repairKey } from '../../utils/techEffects';
 
-// Admin damage editor: edits a local draft and sends a single change on blur/Enter.
+// Admin damage editor: edits a local draft and sends the new value on blur/Enter.
 function DamageInput({ factory, onCommit }) {
   const [draft, setDraft] = useState(null);
   const commit = () => {
     if (draft === null) return;
     const newVal = Math.max(0, Math.min(parseInt(draft, 10) || 0, factory.capacity * 2));
     setDraft(null);
-    if (newVal !== factory.damage) onCommit(newVal - factory.damage);
+    if (newVal !== factory.damage) onCommit(newVal);
   };
   return (
     <input 
@@ -30,7 +30,6 @@ export default function FactoriesPanel({
   purchasesLocked,
   isBanker,
   factories,
-  hasIncreasedProd,
   adminEditMode,
   transferFactoryData,
   setTransferFactoryData,
@@ -44,7 +43,8 @@ export default function FactoriesPanel({
   currentPurchases,
   addFactory,
   removeFactory,
-  updateFactoryDamage,
+  bombFactory,
+  setFactoryDamage,
   transferFactory,
   handleRepairQueue
 }) {
@@ -129,7 +129,7 @@ export default function FactoriesPanel({
               onClick={() => {
                 const limitedValue = Math.min(bombingRaidValue, bombingRaidData.maxDamage - bombingRaidData.currentDamage);
                 if (limitedValue > 0) {
-                  updateFactoryDamage(nation.name, bombingRaidData.id, limitedValue);
+                  bombFactory(nation.name, bombingRaidData.id, limitedValue);
                 }
                 setBombingRaidData(null);
                 setBombingRaidValue(0);
@@ -149,7 +149,8 @@ export default function FactoriesPanel({
             <div className="flex flex-col leading-tight min-w-0">
               <span className="font-bold text-[11px] truncate">{f.name}</span>
               <div className="flex gap-2 items-center opacity-60 text-[9px] uppercase font-bold tracking-tighter">
-                <span>Cap {getFactoryProductionBonus(f, hasIncreasedProd) ? `${f.capacity} + 2` : f.capacity}</span>
+                <span>Cap {getFactoryProductionBonus(f, nation.tech) ? `${f.capacity} + 2` : f.capacity}</span>
+                {f.builtThisTurn && <span className="text-amber-400">New: produces next turn</span>}
                 <span className="w-1 h-1 bg-current rounded-full opacity-20"></span>
                 <span>Max Dmg {f.capacity * 2}</span>
               </div>
@@ -159,7 +160,7 @@ export default function FactoriesPanel({
               {adminEditMode ? (
                 <DamageInput
                   factory={f}
-                  onCommit={(delta) => updateFactoryDamage(nation.name, f.id, delta, false, true)}
+                  onCommit={(damage) => setFactoryDamage(nation.name, f.id, damage)}
                 />
               ) : (
                 <div className={cn("font-black px-1.5 py-0.5 border text-[10px] min-w-[24px] text-center rounded-sm tracking-tighter", 
@@ -189,10 +190,10 @@ export default function FactoriesPanel({
                     <Trash2 size={10} />
                   </button>
                   
-                  {(!purchasesLocked || isBanker) && f.damage > 0 && (
+                  {!purchasesLocked && (f.damage > 0 || currentPurchases[repairKey(f.id)] > 0) && (
                     <div className="flex items-center gap-0.5 bg-green-950/40 px-1 py-0.5 border border-green-500/30 rounded-sm ml-1">
                       <button onClick={() => handleRepairQueue(f.id, -1)} className="w-4 h-4 bg-black/40 text-white flex justify-center items-center hover:bg-black/60 active:scale-95 text-[10px]">-</button>
-                      <span className="text-[10px] font-black w-3 text-center text-green-400">{currentPurchases[`repair_${f.id}`] || 0}</span>
+                      <span className="text-[10px] font-black w-3 text-center text-green-400">{currentPurchases[repairKey(f.id)] || 0}</span>
                       <button onClick={() => handleRepairQueue(f.id, 1)} className="w-4 h-4 bg-white/10 text-white flex justify-center items-center hover:bg-white/20 active:scale-95 text-[10px]">+</button>
                     </div>
                   )}

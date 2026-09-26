@@ -2,7 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 // Ensure db path is relative to the backend root, not the current file
-const dbPath = path.resolve(__dirname, '../../game.db');
+const dbPath = process.env.DB_PATH || path.resolve(__dirname, '../../game.db');
 
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {

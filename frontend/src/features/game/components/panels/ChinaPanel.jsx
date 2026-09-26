@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useGameStore } from '../../../../store/gameStore';
 import { cn } from '../../../../utils/styles';
 
-const CHINA_TERRITORIES_LIST = ['Sinkiang', 'Kansu', 'Szechwan', 'Shensi', 'Kweichow', 'Yunnan', 'Hopei', 'Kiangsu'];
+import { CHINA_TERRITORIES as CHINA_TERRITORIES_LIST } from '../../../../constants/gameData';
+import { getChinaInfantryAllowed } from '../../../../../../shared/gameRules.mjs';
 
 export default function ChinaPanel({ isEditable }) {
   const { gameData, currentTurn, updateChinaTerritories, mobilizeChinaInfantry } = useGameStore();
@@ -11,7 +12,7 @@ export default function ChinaPanel({ isEditable }) {
   const list = gameData?.china_territories || [];
   const chinaControlledCount = list.length;
   // AA50: 1 infantry for every 2 controlled territories (rounded down), placed during the US turn, once.
-  const chinaInfantryAllowed = Math.floor(chinaControlledCount / 2);
+  const chinaInfantryAllowed = getChinaInfantryAllowed(chinaControlledCount);
   const alreadyPlaced = !!gameData?.china_reinforcements_placed;
   const canPlace = isEditable && currentTurn === 'USA' && !alreadyPlaced && chinaInfantryAllowed > 0;
 

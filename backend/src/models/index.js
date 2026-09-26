@@ -7,11 +7,12 @@ const techModel = require('./techModel');
 const objectiveModel = require('./objectiveModel');
 const logModel = require('./logModel');
 
-// Initialize database
-initDb();
+// Initialize database (server.js waits for this before accepting connections)
+const ready = initDb();
 
 module.exports = {
     db,
+    ready,
     withLock: db.withLock,
     ...gameModel,
     ...nationModel,

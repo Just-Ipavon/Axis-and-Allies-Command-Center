@@ -1,51 +1,42 @@
 const db = require('../database/connection');
 const { hashPassword, verifyPassword } = require('../utils/auth');
-const { getStartingData, getTurnOrder, getStartingChina, getChinaInfantryAllowed, CHINA_TERRITORIES, GAME_VERSIONS } = require('../config/gameConfig');
+const {
+    RULES,
+    normalizeVersion,
+    getTurnOrder,
+    getStartingNations,
+    getStartingChina,
+    getChinaInfantryAllowed
+} = require('../config/gameConfig');
+const { addLog } = require('./logModel');
 
-const getGamesList = () => {
-    return new Promise((resolve, reject) => {
-        db.all("SELECT id, room_name, game_version, CASE WHEN password IS NOT NULL AND password != '' THEN 1 ELSE 0 END as hasPassword FROM games ORDER BY id DESC", [], (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-        });
-    });
-};
+const getGamesList = () => db.allAsync(
+    "SELECT id, room_name, game_version, CASE WHEN password IS NOT NULL AND password != '' THEN 1 ELSE 0 END as hasPassword FROM games ORDER BY id DESC"
+);
 
-const getGame = (gameId) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT * FROM games WHERE id = ?', [gameId], (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-        });
-    });
-};
+const getGame = (gameId) => db.getAsync('SELECT * FROM games WHERE id = ?', [gameId]);
 
-const getGameByRoomName = (roomName) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT * FROM games WHERE LOWER(room_name) = LOWER(?)', [roomName], (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-        });
-    });
-};
+const getGameByRoomName = (roomName) => db.getAsync('SELECT * FROM games WHERE LOWER(room_name) = LOWER(?)', [roomName]);
 
 // Writes a fresh game state. Password values must already be hashed.
+// Callers run inside db.withLock, so the explicit transaction never nests.
 const writeFreshGame = async (gameId, passwordHash, masterHash, roomName, gameVersion) => {
-    const startingTurn = getTurnOrder(gameVersion)[0] || 'USSR';
-    const startingChina = getStartingChina(gameVersion);
+    const version = normalizeVersion(gameVersion);
+    const startingTurn = getTurnOrder(version)[0];
     const now = Date.now();
 
     await db.runAsync('BEGIN IMMEDIATE');
     try {
-        await db.runAsync('INSERT OR REPLACE INTO games (id, room_name, current_turn, password, master_password, play_time, last_resume_at, last_empty_at, game_version, china_territories, china_reinforcements_placed) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 0)',
-            [gameId, roomName, startingTurn, passwordHash, masterHash, 0, now, gameVersion, JSON.stringify(startingChina)]);
+        await db.runAsync('INSERT OR REPLACE INTO games (id, room_name, current_turn, password, master_password, play_time, last_resume_at, last_empty_at, game_version, china_territories, china_reinforcements_placed) VALUES (?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, 0)',
+            [gameId, roomName, startingTurn, passwordHash, masterHash, now, version, JSON.stringify(getStartingChina(version))]);
         await db.runAsync('DELETE FROM nations WHERE game_id = ?', [gameId]);
-        for (const data of getStartingData(gameVersion)) {
+        for (const nation of getStartingNations(version)) {
+            const factories = nation.factories.map(f => ({ ...f, damage: 0, repairedThisTurn: 0 }));
             await db.runAsync('INSERT INTO nations (game_id, name, income, bank, purchases, player_name, factories, research_tokens, tech, active_objectives, capital_captured, tokens_rolled, purchases_locked, last_purchases, last_collected) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, 0, 0, NULL, NULL)',
-                [gameId, data[0], data[1], data[2], JSON.stringify({}), '', JSON.stringify(data[3] || []), '[]', '[]']);
+                [gameId, nation.name, nation.income, nation.bank, '{}', '', JSON.stringify(factories), '[]', '[]']);
         }
         await db.runAsync('DELETE FROM logs WHERE game_id = ?', [gameId]);
-        await db.runAsync('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, 'Room Created: Operations Commenced.']);
+        await addLog(gameId, 'Room Created: Operations Commenced.');
         await db.runAsync('COMMIT');
     } catch (err) {
         await db.runAsync('ROLLBACK').catch(() => {});
@@ -55,34 +46,23 @@ const writeFreshGame = async (gameId, passwordHash, masterHash, roomName, gameVe
 };
 
 const createOrResetGame = async (gameId, password = "", masterPassword = "", roomName = "Operation Enigma", gameVersion = "1942") => {
-    if (!gameId || gameId.trim() === '') {
-        throw new Error("Invalid Game ID");
-    }
-    if (!GAME_VERSIONS.includes(gameVersion)) gameVersion = '1942';
+    if (!gameId || gameId.trim() === '') throw new Error("Invalid Game ID");
     const hashedPwd = await hashPassword(password);
     const hashedMaster = await hashPassword(masterPassword);
     return writeFreshGame(gameId, hashedPwd, hashedMaster, roomName, gameVersion);
 };
 
-// Resets the game state while keeping the room/master passwords, name and version.
+// Resets the game state while keeping the room/master passwords, name and edition.
 const resetGameState = async (gameId) => {
     const game = await getGame(gameId);
     if (!game) throw new Error('Game not found');
-    return writeFreshGame(gameId, game.password || '', game.master_password || '', game.room_name || 'Unknown Operation', game.game_version || '1942');
+    return writeFreshGame(gameId, game.password || '', game.master_password || '', game.room_name || 'Unknown Operation', game.game_version);
 };
 
-const updateGameTime = (gameId, playTime, lastResumeAt, lastEmptyAt) => {
-    return new Promise((resolve, reject) => {
-        db.run(
-            'UPDATE games SET play_time = ?, last_resume_at = ?, last_empty_at = ? WHERE id = ?',
-            [playTime, lastResumeAt, lastEmptyAt, gameId],
-            (err) => {
-                if (err) reject(err);
-                resolve(true);
-            }
-        );
-    });
-};
+const updateGameTime = (gameId, playTime, lastResumeAt, lastEmptyAt) => db.runAsync(
+    'UPDATE games SET play_time = ?, last_resume_at = ?, last_empty_at = ? WHERE id = ?',
+    [playTime, lastResumeAt, lastEmptyAt, gameId]
+);
 
 const verifyMasterPassword = async (gameId, password) => {
     if (process.env.ADMIN_OVERRIDE_PASSWORD && password === process.env.ADMIN_OVERRIDE_PASSWORD) return true;
@@ -103,31 +83,16 @@ const verifyRoomPassword = async (gameId, password) => {
     return true;
 };
 
-const deleteGame = (gameId) => {
-    return new Promise((resolve, reject) => {
-        db.serialize(() => {
-            db.run('DELETE FROM games WHERE id = ?', [gameId]);
-            db.run('DELETE FROM nations WHERE game_id = ?', [gameId]);
-            db.run('DELETE FROM logs WHERE game_id = ?', [gameId], (err) => {
-                if(err) reject(err);
-                resolve(true);
-            });
-        });
-    });
-};
-
-const updateGameTurn = (gameId, nextTurn) => {
-    return new Promise((resolve, reject) => {
-        db.run('UPDATE games SET current_turn = ? WHERE id = ?', [nextTurn, gameId], (err) => {
-            if (err) reject(err);
-            resolve(true);
-        });
-    });
+const deleteGame = async (gameId) => {
+    await db.runAsync('DELETE FROM games WHERE id = ?', [gameId]);
+    await db.runAsync('DELETE FROM nations WHERE game_id = ?', [gameId]);
+    await db.runAsync('DELETE FROM logs WHERE game_id = ?', [gameId]);
+    return true;
 };
 
 const updateChinaTerritories = async (gameId, territories) => {
     if (!Array.isArray(territories)) throw new Error('Invalid territories');
-    const clean = [...new Set(territories.filter(t => CHINA_TERRITORIES.includes(t)))];
+    const clean = [...new Set(territories.filter(t => RULES.chinaTerritories.includes(t)))];
     await db.runAsync('UPDATE games SET china_territories = ? WHERE id = ?', [JSON.stringify(clean), gameId]);
     return true;
 };
@@ -152,7 +117,7 @@ const mobilizeChinaInfantry = async (gameId, placements) => {
 
     const details = entries.map(([t, qty]) => `${qty} in ${t}`).join(', ');
     await db.runAsync('UPDATE games SET china_reinforcements_placed = 1 WHERE id = ?', [gameId]);
-    await db.runAsync('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, `🇨🇳 China Mobilization: Placed Chinese Infantry (${details}).`]);
+    await addLog(gameId, `🇨🇳 China Mobilization: Placed Chinese Infantry (${details}).`);
     return true;
 };
 
@@ -166,7 +131,6 @@ module.exports = {
     verifyMasterPassword,
     verifyRoomPassword,
     deleteGame,
-    updateGameTurn,
     updateChinaTerritories,
     mobilizeChinaInfantry
 };

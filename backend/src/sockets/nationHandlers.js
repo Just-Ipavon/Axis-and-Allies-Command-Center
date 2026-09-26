@@ -1,6 +1,6 @@
 const db = require('../models');
 const { truncateString, assertNations, onGameEvent } = require('./utils');
-const { NATIONAL_OBJECTIVES, ALL_TECHS } = require('../config/gameConfig');
+const { ALL_TECHS, getObjective } = require('../config/gameConfig');
 
 const nationName = (value) => truncateString(value, 50);
 
@@ -8,14 +8,31 @@ module.exports = (io, socket) => {
     const on = (event, handler, options) => onGameEvent(io, socket, event, handler, options);
     const isBanker = (gameId) => socket.bankerFor === gameId;
 
-    on('updateNation', async ({ name, income, bank, purchases, playerName, logMessage }, gameId) => {
+    on('setPlayerName', async ({ name, playerName }, gameId) => {
         const cleanName = nationName(name);
         await assertNations(gameId, cleanName);
-        await db.updateNationStatus(gameId, cleanName, income, bank, purchases, truncateString(playerName, 50));
-        if (logMessage) {
-            await db.addLog(gameId, truncateString(logMessage, 500));
-        }
+        await db.setPlayerName(gameId, cleanName, truncateString(playerName, 50));
     });
+
+    // Cart intents: the server computes costs, capacity and the new bank.
+    on('adjustPurchase', async ({ name, unit, delta, territoryName, capacity }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.adjustPurchase(gameId, cleanName, truncateString(unit, 40), delta,
+            { territoryName: truncateString(territoryName, 100).trim(), capacity }, isBanker(gameId));
+    });
+
+    on('adjustRepair', async ({ name, factoryId, delta }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.adjustRepair(gameId, cleanName, truncateString(factoryId, 50), delta, isBanker(gameId));
+    });
+
+    on('adminSetEconomy', async ({ name, income, bank }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.adminSetEconomy(gameId, cleanName, income, bank);
+    }, { bankerOnly: true });
 
     // The income log is built server-side from the amount actually collected.
     on('collectIncome', async ({ name }, gameId) => {
@@ -54,20 +71,26 @@ module.exports = (io, socket) => {
         await db.transferFactory(gameId, cleanOld, cleanNew, truncateString(factoryId, 50));
     });
 
-    on('updateFactoryDamage', async ({ name, factoryId, damageDelta, isUndo, isFree }, gameId) => {
+    on('bombFactory', async ({ name, factoryId, damage }, gameId) => {
         const cleanName = nationName(name);
-        const delta = Number(damageDelta);
-        if (!Number.isInteger(delta) || Math.abs(delta) > 100) throw new Error('Invalid damage value');
-        // Free damage edits bypass repair costs: Game Master only.
-        if (isFree && !isBanker(gameId)) throw new Error('Banker authorization required');
+        const points = Number(damage);
+        if (!Number.isInteger(points) || points < 1 || points > 40) throw new Error('Invalid damage value');
         await assertNations(gameId, cleanName);
-        await db.updateFactoryDamage(gameId, cleanName, truncateString(factoryId, 50), delta, !!isUndo, !!isFree);
+        await db.applyBombingDamage(gameId, cleanName, truncateString(factoryId, 50), points);
     });
 
-    on('lockPurchases', async ({ name, logMessage }, gameId) => {
+    on('setFactoryDamage', async ({ name, factoryId, damage }, gameId) => {
+        const cleanName = nationName(name);
+        const points = Number(damage);
+        if (!Number.isInteger(points) || points < 0 || points > 40) throw new Error('Invalid damage value');
+        await assertNations(gameId, cleanName);
+        await db.setFactoryDamage(gameId, cleanName, truncateString(factoryId, 50), points);
+    }, { bankerOnly: true });
+
+    on('lockPurchases', async ({ name }, gameId) => {
         const cleanName = nationName(name);
         await assertNations(gameId, cleanName);
-        await db.lockPurchases(gameId, cleanName, truncateString(logMessage, 500));
+        await db.lockPurchases(gameId, cleanName);
     });
 
     on('unlockPurchases', async ({ name }, gameId) => {
@@ -107,7 +130,7 @@ module.exports = (io, socket) => {
     on('toggleNationalObjective', async ({ name, objectiveId, isActive }, gameId) => {
         const cleanName = nationName(name);
         const cleanObjective = truncateString(objectiveId, 100);
-        if (!NATIONAL_OBJECTIVES[cleanName] || !NATIONAL_OBJECTIVES[cleanName][cleanObjective]) throw new Error('Unknown objective');
+        if (!getObjective(cleanName, cleanObjective)) throw new Error('Unknown objective');
         await assertNations(gameId, cleanName);
         await db.toggleNationalObjective(gameId, cleanName, cleanObjective, !!isActive);
     });

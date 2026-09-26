@@ -1,8 +1,7 @@
-import React from 'react';
 import { cn } from '../../../../utils/styles';
 import { UNITS } from '../../../../constants/gameData';
 import { UnitIconResolver } from '../../../../components/icons/UnitIcons';
-import { getUnitCost, getUnitStats } from '../../utils/techEffects';
+import { getUnitCost, getUnitStats, getRepairCost } from '../../utils/techEffects';
 
 export default function MobilizationPanel({
   nation,
@@ -12,8 +11,7 @@ export default function MobilizationPanel({
   totalPurchased,
   totalCapacity,
   currentPurchases,
-  handlePurchase,
-  hasIncreasedProd
+  handlePurchase
 }) {
   return (
     <div className="flex-1 mt-2 relative">
@@ -68,7 +66,7 @@ export default function MobilizationPanel({
         {(() => {
           const totalPendingRepairCost = Object.entries(currentPurchases).reduce((sum, [k, qty]) => {
             if (k.startsWith('repair_')) {
-              return sum + (hasIncreasedProd ? Math.ceil(qty / 2) : qty);
+              return sum + getRepairCost(qty, nation.tech);
             }
             return sum;
           }, 0);

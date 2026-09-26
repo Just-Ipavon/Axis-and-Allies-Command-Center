@@ -116,6 +116,13 @@ Since the Backend Application simultaneously serves the compiled React build, no
 <kbd>pm2 save</kbd>
 ```
 
+### Shared game rules & tests
+
+- **`shared/gameRules.mjs`** is the single source of truth for game data and rules (unit costs, turn orders, starting setups, objectives, tech charts, China, production capacity and repair costs). The backend loads it with `require` and the frontend imports it, so both always agree.
+- The server is authoritative: clients send *intents* (e.g. `adjustPurchase {unit, delta}`) and the server computes costs, capacity and bank.
+- Requires **Node.js 22.12+**.
+- Run the backend test suite (rules + end-to-end socket tests on a temporary database) with `cd backend && npm test`.
+
 ### Environment variables (`backend/.env`)
 
 | Variable | Default | Purpose |

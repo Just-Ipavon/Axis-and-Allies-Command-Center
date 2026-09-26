@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // Game rules are imported from ../shared (also used by the backend).
+  server: { fs: { allow: ['..'] } },
   plugins: [
     react(),
     VitePWA({

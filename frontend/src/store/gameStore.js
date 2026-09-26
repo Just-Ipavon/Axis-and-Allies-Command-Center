@@ -23,6 +23,13 @@ const writeMaster = (value) => {
     } catch { /* storage unavailable */ }
 };
 
+// Emits a game action for the current game. Resolves with the server acknowledgement.
+const sendAction = (get, event, payload) => new Promise((resolve) => {
+    const { gameId } = get();
+    if (!gameId) return resolve({ error: 'No game connected' });
+    gameSocket.emit(event, { gameId, ...payload }, (res) => resolve(res || {}));
+});
+
 export const useGameStore = create((set, get) => ({
     gameId: savedGameId || null, 
     gameData: null,
@@ -179,71 +186,32 @@ export const useGameStore = create((set, get) => ({
         });
     },
 
-    updateNationBank: (name, income, bank, purchases, playerName, logMessage = null) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('updateNation', { gameId, name, income, bank, purchases, playerName, logMessage });
-    },
-
-    conquerTerritory: (conqueror, victim, value, targetType, liberatedFor = null) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('conquerTerritory', { gameId, conqueror, victim, value, targetType, liberatedFor });
-    },
-
-    advanceTurn: () => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('advanceTurn', gameId);
-    },
-
-    collectIncome: (name, logMessage) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('collectIncome', { gameId, name, logMessage });
-    },
-
-    addFactory: (name, territoryName, capacity) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('addFactory', { gameId, name, territoryName, capacity });
-    },
-    
-    removeFactory: (name, factoryId) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('removeFactory', { gameId, name, factoryId });
-    },
-    
-    updateFactoryDamage: (name, factoryId, damageDelta, isUndo = false, isFree = false) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('updateFactoryDamage', { gameId, name, factoryId, damageDelta, isUndo, isFree });
-    },
-    
-    undoTurn: () => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('undoTurn', gameId);
-    },
-
-    lockPurchases: (name, logMessage) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('lockPurchases', { gameId, name, logMessage });
-    },
-
-    unlockPurchases: (name) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('unlockPurchases', { gameId, name });
-    },
-
-    transferFactory: (oldNation, newNation, factoryId) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('transferFactory', { gameId, oldNation, newNation, factoryId });
-    },
+    // Nation actions send intents; the server validates them, computes the result
+    // and broadcasts the new state. Rejections arrive as 'actionError'.
+    setPlayerName: (name, playerName) => sendAction(get, 'setPlayerName', { name, playerName }),
+    adjustPurchase: (name, unit, delta, factory = {}) => sendAction(get, 'adjustPurchase', { name, unit, delta, ...factory }),
+    adjustRepair: (name, factoryId, delta) => sendAction(get, 'adjustRepair', { name, factoryId, delta }),
+    adminSetEconomy: (name, income, bank) => sendAction(get, 'adminSetEconomy', { name, income, bank }),
+    conquerTerritory: (conqueror, victim, value, targetType, liberatedFor = null) =>
+        sendAction(get, 'conquerTerritory', { conqueror, victim, value, targetType, liberatedFor }),
+    collectIncome: (name) => sendAction(get, 'collectIncome', { name }),
+    advanceTurn: () => sendAction(get, 'advanceTurn', {}),
+    undoTurn: () => sendAction(get, 'undoTurn', {}),
+    lockPurchases: (name) => sendAction(get, 'lockPurchases', { name }),
+    unlockPurchases: (name) => sendAction(get, 'unlockPurchases', { name }),
+    addFactory: (name, territoryName, capacity) => sendAction(get, 'addFactory', { name, territoryName, capacity }),
+    removeFactory: (name, factoryId) => sendAction(get, 'removeFactory', { name, factoryId }),
+    transferFactory: (oldNation, newNation, factoryId) => sendAction(get, 'transferFactory', { oldNation, newNation, factoryId }),
+    bombFactory: (name, factoryId, damage) => sendAction(get, 'bombFactory', { name, factoryId, damage }),
+    setFactoryDamage: (name, factoryId, damage) => sendAction(get, 'setFactoryDamage', { name, factoryId, damage }),
+    toggleCapitalStatus: (name, isCaptured) => sendAction(get, 'toggleCapitalStatus', { name, isCaptured }),
+    buyTechToken: (name) => sendAction(get, 'buyTechToken', { name }),
+    refundTechToken: (name) => sendAction(get, 'refundTechToken', { name }),
+    rollForTech: (name, chartId) => sendAction(get, 'rollForTech', { name, chartId }),
+    toggleNationalObjective: (name, objectiveId, isActive) => sendAction(get, 'toggleNationalObjective', { name, objectiveId, isActive }),
+    toggleTechnology: (name, techName, isActive) => sendAction(get, 'toggleTechnology', { name, techName, isActive }),
+    updateChinaTerritories: (territories) => sendAction(get, 'updateChinaTerritories', { territories }),
+    mobilizeChinaInfantry: (placements) => sendAction(get, 'mobilizeChinaInfantry', { placements }),
 
     verifyMasterPassword: (masterPassword) => {
         return new Promise((resolve, reject) => {
@@ -266,53 +234,5 @@ export const useGameStore = create((set, get) => ({
                 else resolve(true);
             });
         });
-    },
-
-    toggleCapitalStatus: (name, isCaptured) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('toggleCapitalStatus', { gameId, name, isCaptured });
-    },
-
-    buyTechToken: (name) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('buyTechToken', { gameId, name });
-    },
-
-    refundTechToken: (name) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('refundTechToken', { gameId, name });
-    },
-
-    rollForTech: (name, chartId) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('rollForTech', { gameId, name, chartId });
-    },
-
-    toggleNationalObjective: (name, objectiveId, isActive) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('toggleNationalObjective', { gameId, name, objectiveId, isActive });
-    },
-
-    toggleTechnology: (name, techName, isActive) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('toggleTechnology', { gameId, name, techName, isActive });
-    },
-
-    updateChinaTerritories: (territories) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('updateChinaTerritories', { gameId, territories });
-    },
-
-    mobilizeChinaInfantry: (placements) => {
-        const { gameId } = get();
-        if(!gameId) return;
-        gameSocket.emit('mobilizeChinaInfantry', { gameId, placements });
     }
 }));

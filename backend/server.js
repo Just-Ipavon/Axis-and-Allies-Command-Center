@@ -5,7 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-require('./src/models'); // initializes the database
+const models = require('./src/models');
 
 const gameRoutes = require('./src/routes/gameRoutes');
 const socketInit = require('./src/sockets/index');
@@ -61,6 +61,8 @@ process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', 
 process.on('uncaughtException', (err) => console.error('Uncaught exception:', err));
 
 const PORT = process.env.PORT || 1942;
-server.listen(PORT, () => {
-    console.log(`Backend server running on port ${PORT}`);
+models.ready.then(() => {
+    server.listen(PORT, () => {
+        console.log(`Backend server running on port ${PORT}`);
+    });
 });
