@@ -105,11 +105,11 @@ Since the Backend Application simultaneously serves the compiled React build, no
 
 <!-- 2. Generate optimized static assets for the React interface -->
 <kbd>cd frontend</kbd>
-<kbd>npm install && npm run build</kbd>
+<kbd>npm ci && npm run build</kbd>
 
 <!-- 3. Final Bootstrap via PM2 process manager (loads backend/.env) -->
 <kbd>cd ../backend</kbd>
-<kbd>npm install</kbd>
+<kbd>npm ci</kbd>
 <kbd>pm2 start server.js --name "axis-companion" --node-args="--env-file=.env"</kbd>
 
 <!-- 4. Seal the dump to ensure startup at the next physical Linux machine boot -->
