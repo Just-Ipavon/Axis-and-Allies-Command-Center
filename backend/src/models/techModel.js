@@ -1,4 +1,5 @@
 const db = require('../database/connection');
+const { TECH_CHARTS } = require('../config/gameConfig');
 
 const buyTechToken = (gameId, name) => {
     return new Promise((resolve, reject) => {
@@ -24,12 +25,13 @@ const refundTechToken = (gameId, name) => {
     return new Promise((resolve, reject) => {
         db.get('SELECT bank, research_tokens, tokens_rolled FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
             if (err || !nation) return reject(err || new Error('Nation not found'));
-            if ((nation.research_tokens || 0) <= 0) return reject(new Error('No tokens to refund'));
+            // Only tokens that have not been rolled yet can be refunded.
+            const rolled = nation.tokens_rolled || 0;
+            if ((nation.research_tokens || 0) - rolled <= 0) return reject(new Error('No unrolled tokens to refund'));
             
             const newBank = nation.bank + 5;
             const newTokens = nation.research_tokens - 1;
-            const rolled = nation.tokens_rolled || 0;
-            const newRolled = Math.min(rolled, newTokens);
+            const newRolled = rolled;
             
             db.serialize(() => {
                 db.run('UPDATE nations SET bank = ?, research_tokens = ?, tokens_rolled = ? WHERE game_id = ? AND name = ?', [newBank, newTokens, newRolled, gameId, name]);
@@ -54,29 +56,12 @@ const rollForTech = (gameId, name, chartId) => {
                 return reject(new Error('No unrolled Research Tokens available to roll in this turn!'));
             }
 
-            const CHART_TECHS = {
-                1: [
-                    'Advanced Artillery',
-                    'Rockets',
-                    'Paratroopers',
-                    'Increased Factory Production',
-                    'War Bonds',
-                    'Mechanized Infantry'
-                ],
-                2: [
-                    'Super Submarines',
-                    'Jet Fighters',
-                    'Improved Shipyards',
-                    'Radar',
-                    'Long-Range Aircraft',
-                    'Heavy Bombers'
-                ]
-            };
+            if (!TECH_CHARTS[chartId]) return reject(new Error('Invalid research chart'));
 
             let ownedTechs = [];
             try { ownedTechs = JSON.parse(nation.tech || '[]'); } catch(e){}
 
-            const availableTechs = CHART_TECHS[chartId].filter(t => !ownedTechs.includes(t));
+            const availableTechs = TECH_CHARTS[chartId].filter(t => !ownedTechs.includes(t));
             if (availableTechs.length === 0) {
                 return reject(new Error(`All technologies on Chart ${chartId} have already been unlocked!`));
             }

@@ -107,11 +107,23 @@ Since the Backend Application simultaneously serves the compiled React build, no
 <kbd>cd frontend</kbd>
 <kbd>npm install && npm run build</kbd>
 
-<!-- 3. Final Cluster Bootstrap via PM2 process manager -->
+<!-- 3. Final Bootstrap via PM2 process manager (loads backend/.env) -->
 <kbd>cd ../backend</kbd>
 <kbd>npm install</kbd>
-<kbd>pm2 start server.js --name "axis-companion"</kbd>
+<kbd>pm2 start server.js --name "axis-companion" --node-args="--env-file=.env"</kbd>
 
 <!-- 4. Seal the dump to ensure startup at the next physical Linux machine boot -->
 <kbd>pm2 save</kbd>
 ```
+
+### Environment variables (`backend/.env`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `1942` | HTTP / WebSocket port |
+| `PEPPER_SECRET` | public default (a warning is logged) | Secret mixed into password hashes. **Set it in production** and keep it stable. |
+| `ADMIN_OVERRIDE_PASSWORD` | unset | Optional global master password |
+| `CORS_ORIGINS` | Vite dev server | Comma-separated origins allowed cross-origin |
+| `TRUST_PROXY_HOPS` | `1` | Number of reverse proxies in front of the server |
+
+Run a single Node process: game mutations are serialized in-process, so PM2 cluster mode is not supported.

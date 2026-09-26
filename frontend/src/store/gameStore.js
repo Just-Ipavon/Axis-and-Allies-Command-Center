@@ -8,6 +8,20 @@ const gameSocket = io(`${socketUrl}/game`, { autoConnect: false });
 
 const savedGameId = localStorage.getItem('axis_gameId');
 const savedRole = localStorage.getItem('axis_role') || '';
+let socketsInitialized = false;
+
+// The Game Master password is kept for this tab only, so the server can
+// re-authorize the banker role after a reconnect.
+const MASTER_KEY = 'axis_master';
+const readMaster = () => {
+    try { return sessionStorage.getItem(MASTER_KEY) || ''; } catch { return ''; }
+};
+const writeMaster = (value) => {
+    try {
+        if (value) sessionStorage.setItem(MASTER_KEY, value);
+        else sessionStorage.removeItem(MASTER_KEY);
+    } catch { /* storage unavailable */ }
+};
 
 export const useGameStore = create((set, get) => ({
     gameId: savedGameId || null, 
@@ -17,6 +31,8 @@ export const useGameStore = create((set, get) => ({
     availableRooms: [],
     role: savedRole,
     connected: false,
+    lobbyConnected: false,
+    serverTimeOffset: 0,
 
     setRole: (role) => {
         if (role) {
@@ -55,10 +71,17 @@ export const useGameStore = create((set, get) => ({
     },
     
     initSocket: () => {
+        // React StrictMode runs effects twice in development: register listeners only once.
+        if (socketsInitialized) return;
+        socketsInitialized = true;
+
         // Lobby listeners
         lobbySocket.on('connect', () => {
-            console.log('Connected to lobby namespace');
-            set({ connected: true });
+            set({ lobbyConnected: true });
+        });
+
+        lobbySocket.on('disconnect', () => {
+            set({ lobbyConnected: false });
         });
 
         lobbySocket.on('roomsUpdated', () => {
@@ -73,12 +96,18 @@ export const useGameStore = create((set, get) => ({
             const { gameId } = get();
             if (gameId) {
                 const pwd = localStorage.getItem('axis_password') || '';
-                gameSocket.emit('joinGame', { gameId, password: pwd }, (res) => {
+                gameSocket.emit('joinGame', { gameId, password: pwd, masterPassword: readMaster() }, (res) => {
                     if (res && res.error) {
                         localStorage.removeItem('axis_gameId');
-                        set({ gameId: null });
+                        set({ gameId: null, gameData: null, nations: [], logs: [] });
                         gameSocket.disconnect();
                         console.error("Auto-rejoin failed:", res.error);
+                        return;
+                    }
+                    // The banker role is only kept if the server re-authorized it.
+                    if (get().role === 'banker' && !(res && res.isBanker)) {
+                        writeMaster('');
+                        get().setRole('');
                     }
                 });
             }
@@ -93,8 +122,13 @@ export const useGameStore = create((set, get) => ({
                 gameData: data.game, 
                 nations: data.nations, 
                 logs: data.logs,
-                currentTurn: data.currentTurn
+                currentTurn: data.currentTurn,
+                serverTimeOffset: data.serverTime ? data.serverTime - Date.now() : 0
             });
+        });
+
+        gameSocket.on('actionError', ({ message }) => {
+            alert(`Action rejected: ${message}`);
         });
 
         // Connect lobby by default
@@ -109,10 +143,13 @@ export const useGameStore = create((set, get) => ({
     setGameId: (joinData) => {
         return new Promise((resolve, reject) => {
             if (!joinData) {
+                const { gameId } = get();
+                if (gameId) gameSocket.emit('leaveGame', gameId);
                 localStorage.removeItem('axis_gameId');
                 localStorage.removeItem('axis_password');
                 localStorage.removeItem('axis_role');
-                set({ gameId: null, role: '' });
+                writeMaster('');
+                set({ gameId: null, role: '', gameData: null, nations: [], logs: [], currentTurn: null });
                 return resolve(true);
             }
             const payload = typeof joinData === 'string' ? { gameId: joinData } : joinData;
@@ -129,8 +166,10 @@ export const useGameStore = create((set, get) => ({
                     const prevGameId = localStorage.getItem('axis_gameId');
                     if (prevGameId && prevGameId !== payload.gameId) {
                         localStorage.removeItem('axis_role');
+                        writeMaster('');
                         set({ role: '' });
                     }
+                    if (payload.isCreating && res.isBanker) writeMaster(payload.masterPassword);
                     localStorage.setItem('axis_gameId', payload.gameId);
                     if (payload.password) localStorage.setItem('axis_password', payload.password);
                     set({ gameId: payload.gameId });
@@ -211,8 +250,9 @@ export const useGameStore = create((set, get) => ({
             const { gameId } = get();
             if(!gameId) return reject(new Error('No game connected'));
             gameSocket.emit('verifyMasterPassword', { gameId, masterPassword }, (res) => {
-                if (res && res.error) reject(new Error(res.error));
-                else resolve(true);
+                if (res && res.error) return reject(new Error(res.error));
+                writeMaster(masterPassword);
+                resolve(true);
             });
         });
     },

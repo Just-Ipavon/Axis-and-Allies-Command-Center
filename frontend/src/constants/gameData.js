@@ -37,22 +37,22 @@ export const ALL_OBJECTIVES = {
   ],
   'UK': [
     { id: 'no_uk_1', name: 'Japanese Territory Capture', desc: 'UK controls at least 1 territory originally controlled by Japan', reward: 5 },
-    { id: 'no_uk_2', name: 'British Empire Integrity', desc: 'UK controls Eastern Canada, Western Canada, Gibraltar, Egypt, Australia, and India', reward: 5 },
+    { id: 'no_uk_2', name: 'British Empire Integrity', desc: 'Allies control Eastern Canada, Western Canada, Gibraltar, Egypt, Australia, and Union of South Africa', reward: 5 },
     { id: 'no_uk_3', name: 'France/Balkans Liberation', desc: 'UK controls France and/or Balkans (liberated)', reward: 5 }
   ],
   'Japan': [
-    { id: 'no_japan_1', name: 'Greater East Asia Co-Prosperity Sphere', desc: 'Japan controls at least 10 territories originally controlled by China/Allies/Neutrals', reward: 5 },
-    { id: 'no_japan_2', name: 'Pacific Islands Hegemony', desc: 'Japan controls at least 3 Allied island groups', reward: 5 },
+    { id: 'no_japan_1', name: 'Greater East Asia Co-Prosperity Sphere', desc: 'Axis controls Manchuria, Kiangsu, and French Indo-China Thailand', reward: 5 },
+    { id: 'no_japan_2', name: 'Pacific Islands Hegemony', desc: 'Axis controls any 4 of Kwangtung, East Indies, Borneo, Philippine Islands, New Guinea, and Solomon Islands', reward: 5 },
     { id: 'no_japan_3', name: 'India/Australia/Hawaii Control', desc: 'Japan controls India, Australia, and/or Hawaiian Islands', reward: 5 }
   ],
   'USA': [
-    { id: 'no_usa_1', name: 'Pacific Security Zone', desc: 'USA controls Hawaiian Islands, Midway, Johnston Island, Palmyra, and Wake Island', reward: 5 },
+    { id: 'no_usa_1', name: 'Pacific Security Zone', desc: 'Allies control Alaska, Aleutian Islands, Hawaiian Islands, Johnston Island, and Line Islands', reward: 5 },
     { id: 'no_usa_2', name: 'Western Hemisphere Security', desc: 'USA controls Central America, West Indies, and Colombia/Venezuela', reward: 5 },
     { id: 'no_usa_3', name: 'Liberation of France', desc: 'USA controls France (liberated)', reward: 5 }
   ],
   'Italy': [
-    { id: 'no_italy_1', name: 'Mediterranean Dominance', desc: 'No Allied surface warships in Mediterranean (Sea Zones 13-16)', reward: 5 },
-    { id: 'no_italy_2', name: 'Roman Empire Revival', desc: 'Italy controls Gibraltar, Egypt, and/or Greece', reward: 5 }
+    { id: 'no_italy_1', name: 'Mediterranean Dominance', desc: 'Axis controls Southern Europe, Balkans, Morocco Algeria, and Libya, with no Allied surface warships in Sea Zones 13, 14, and 15', reward: 5 },
+    { id: 'no_italy_2', name: 'Roman Empire Revival', desc: 'Axis controls at least 3 of Egypt, Trans-Jordan, France, and Gibraltar', reward: 5 }
   ]
 };
 

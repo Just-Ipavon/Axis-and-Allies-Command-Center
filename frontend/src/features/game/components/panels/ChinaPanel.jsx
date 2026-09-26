@@ -1,16 +1,19 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useGameStore } from '../../../../store/gameStore';
 import { cn } from '../../../../utils/styles';
 
 const CHINA_TERRITORIES_LIST = ['Sinkiang', 'Kansu', 'Szechwan', 'Shensi', 'Kweichow', 'Yunnan', 'Hopei', 'Kiangsu'];
 
 export default function ChinaPanel({ isEditable }) {
-  const { gameData, updateChinaTerritories, mobilizeChinaInfantry } = useGameStore();
+  const { gameData, currentTurn, updateChinaTerritories, mobilizeChinaInfantry } = useGameStore();
   const [chinaPlacements, setChinaPlacements] = useState({});
 
   const list = gameData?.china_territories || [];
   const chinaControlledCount = list.length;
-  const chinaInfantryAllowed = chinaControlledCount > 0 ? Math.max(1, Math.ceil(chinaControlledCount / 2)) : 0;
+  // AA50: 1 infantry for every 2 controlled territories (rounded down), placed during the US turn, once.
+  const chinaInfantryAllowed = Math.floor(chinaControlledCount / 2);
+  const alreadyPlaced = !!gameData?.china_reinforcements_placed;
+  const canPlace = isEditable && currentTurn === 'USA' && !alreadyPlaced && chinaInfantryAllowed > 0;
 
   const handleChinaPlacementChange = (territory, delta) => {
     const currentPlaced = Object.values(chinaPlacements).reduce((sum, q) => sum + q, 0);
@@ -54,7 +57,7 @@ export default function ChinaPanel({ isEditable }) {
           Chinese Faction Dashboard
         </div>
         <div className="text-[10px] opacity-75 uppercase mb-2 font-medium text-left">
-          China controlled: <span className="font-bold text-amber-500">{chinaControlledCount}/8</span> base territories
+          China controlled: <span className="font-bold text-amber-500">{chinaControlledCount}/{CHINA_TERRITORIES_LIST.length}</span> base territories
         </div>
       </div>
 
@@ -69,7 +72,7 @@ export default function ChinaPanel({ isEditable }) {
                 <label 
                   key={terr} 
                   className={cn("px-2 py-1 border flex items-center gap-2 cursor-pointer transition-colors text-left", 
-                    controlled ? "bg-red-850/30 border-red-500/40 text-red-100 font-bold" : "bg-black/10 border-transparent opacity-60")}
+                    controlled ? "bg-red-900/30 border-red-500/40 text-red-100 font-bold" : "bg-black/10 border-transparent opacity-60")}
                 >
                   <input 
                     type="checkbox" 
@@ -100,7 +103,7 @@ export default function ChinaPanel({ isEditable }) {
               return (
                 <div key={terr} className="flex justify-between items-center bg-black/10 p-1.5 gap-1.5">
                   <span className="truncate flex-1 font-medium">{terr}</span>
-                  {isEditable ? (
+                  {canPlace ? (
                     <div className="flex items-center gap-1 shrink-0">
                       <span className="opacity-70 text-[10px] w-2.5 text-right font-bold">{qty > 0 ? qty : ''}</span>
                       <button onClick={() => handleChinaPlacementChange(terr, -1)} className="bg-black/30 h-5 w-5 flex items-center justify-center hover:bg-black/50 active:scale-95 text-xs">-</button>
@@ -118,7 +121,14 @@ export default function ChinaPanel({ isEditable }) {
               </div>
             )}
           </div>
-          {isEditable && chinaControlledCount > 0 && (
+          {isEditable && chinaControlledCount > 0 && !canPlace && (
+            <div className="text-[9px] italic opacity-60 py-1 text-center">
+              {alreadyPlaced ? 'Reinforcements already placed this turn.'
+                : currentTurn !== 'USA' ? 'Chinese infantry is placed during the USA turn.'
+                : 'Not enough territories for reinforcements.'}
+            </div>
+          )}
+          {canPlace && (
             <button 
               disabled={totalPlaced === 0}
               onClick={handleChinaMobilize}

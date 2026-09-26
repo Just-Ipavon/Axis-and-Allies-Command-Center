@@ -42,3 +42,7 @@ export const getUnitStats = (unitName, techArray) => {
 
   return { a: attack, d: defense, m: movement };
 };
+
+// Increased Factory Production (AA50): +2 units only for complexes in territories worth 3+ IPCs.
+export const getFactoryProductionBonus = (factory, hasIncreasedProd) =>
+  hasIncreasedProd && parseInt(factory.capacity || 0, 10) >= 3 ? 2 : 0;

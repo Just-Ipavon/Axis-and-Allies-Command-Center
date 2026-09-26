@@ -32,6 +32,9 @@ const initDb = () => {
                 active_objectives TEXT DEFAULT '[]',
                 capital_captured INTEGER DEFAULT 0,
                 tokens_rolled INTEGER DEFAULT 0,
+                purchases_locked INTEGER DEFAULT 0,
+                last_purchases TEXT,
+                last_collected INTEGER,
                 PRIMARY KEY (game_id, name)
             )`);
 
@@ -61,6 +64,7 @@ const initDb = () => {
             runMigration("ALTER TABLE nations ADD COLUMN active_objectives TEXT DEFAULT '[]'");
             runMigration("ALTER TABLE nations ADD COLUMN capital_captured INTEGER DEFAULT 0");
             runMigration("ALTER TABLE nations ADD COLUMN tokens_rolled INTEGER DEFAULT 0");
+            runMigration("ALTER TABLE nations ADD COLUMN last_collected INTEGER");
             runMigration("ALTER TABLE games ADD COLUMN password TEXT");
             runMigration("ALTER TABLE games ADD COLUMN master_password TEXT");
             runMigration("ALTER TABLE games ADD COLUMN play_time INTEGER DEFAULT 0");

@@ -1,147 +1,130 @@
 const db = require('../models');
-const { truncateString, broadcastGameState } = require('./utils');
+const { truncateString, assertNations, onGameEvent } = require('./utils');
+const { NATIONAL_OBJECTIVES, ALL_TECHS } = require('../config/gameConfig');
+
+const nationName = (value) => truncateString(value, 50);
 
 module.exports = (io, socket) => {
-    socket.on('updateNation', async ({ gameId, name, income, bank, purchases, playerName, logMessage }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.updateNationStatus(cleanGameId, truncateString(name, 50), income, bank, purchases, truncateString(playerName, 50));
-            if (logMessage) {
-                await db.addLog(cleanGameId, truncateString(logMessage, 500));
-            }
-            await broadcastGameState(io, cleanGameId);
-        } catch (e) {
-            console.error('updateNation error:', e);
+    const on = (event, handler, options) => onGameEvent(io, socket, event, handler, options);
+    const isBanker = (gameId) => socket.bankerFor === gameId;
+
+    on('updateNation', async ({ name, income, bank, purchases, playerName, logMessage }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.updateNationStatus(gameId, cleanName, income, bank, purchases, truncateString(playerName, 50));
+        if (logMessage) {
+            await db.addLog(gameId, truncateString(logMessage, 500));
         }
     });
 
-    socket.on('collectIncome', async ({ gameId, name, logMessage }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.collectIncome(cleanGameId, truncateString(name, 50), truncateString(logMessage, 500));
-            await broadcastGameState(io, cleanGameId);
-        } catch (e) {
-            console.error('collectIncome error:', e);
-        }
+    // The income log is built server-side from the amount actually collected.
+    on('collectIncome', async ({ name }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.collectIncome(gameId, cleanName);
     });
 
-    socket.on('conquerTerritory', async (data) => {
-        try {
-            const { gameId, conqueror, victim, value, targetType, liberatedFor } = data;
-            const cleanGameId = truncateString(gameId, 50);
-            await db.conquerTerritory(cleanGameId, truncateString(conqueror, 50), truncateString(victim, 50), value, truncateString(targetType, 50), liberatedFor ? truncateString(liberatedFor, 50) : null);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('conquerTerritory', async ({ conqueror, victim, value, targetType, liberatedFor }, gameId) => {
+        const cleanConqueror = nationName(conqueror);
+        const cleanVictim = nationName(victim);
+        const cleanLiberatedFor = liberatedFor ? nationName(liberatedFor) : null;
+        await assertNations(gameId, cleanConqueror, cleanVictim, ...(cleanLiberatedFor ? [cleanLiberatedFor] : []));
+        await db.conquerTerritory(gameId, cleanConqueror, cleanVictim, value, targetType === 'capital' ? 'capital' : 'income', cleanLiberatedFor);
     });
 
-    socket.on('addFactory', async ({ gameId, name, territoryName, capacity }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.addFactory(cleanGameId, truncateString(name, 50), truncateString(territoryName, 100), capacity);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
-    });
-    
-    socket.on('removeFactory', async ({ gameId, name, factoryId }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.removeFactory(cleanGameId, truncateString(name, 50), truncateString(factoryId, 50));
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
-    });
-    
-    socket.on('transferFactory', async ({ gameId, oldNation, newNation, factoryId }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.transferFactory(cleanGameId, truncateString(oldNation, 50), truncateString(newNation, 50), truncateString(factoryId, 50));
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
-    });
-    
-    socket.on('updateFactoryDamage', async ({ gameId, name, factoryId, damageDelta, isUndo, isFree }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.updateFactoryDamage(cleanGameId, truncateString(name, 50), truncateString(factoryId, 50), damageDelta, isUndo, isFree);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('addFactory', async ({ name, territoryName, capacity }, gameId) => {
+        const cleanName = nationName(name);
+        const cleanTerritory = truncateString(territoryName, 100).trim();
+        const cap = Number(capacity);
+        if (!cleanTerritory || !Number.isInteger(cap) || cap < 1 || cap > 20) throw new Error('Invalid factory data');
+        await assertNations(gameId, cleanName);
+        await db.addFactory(gameId, cleanName, cleanTerritory, cap);
     });
 
-    socket.on('lockPurchases', async ({ gameId, name, logMessage }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.lockPurchases(cleanGameId, truncateString(name, 50), truncateString(logMessage, 500));
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('removeFactory', async ({ name, factoryId }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.removeFactory(gameId, cleanName, truncateString(factoryId, 50));
     });
 
-    socket.on('unlockPurchases', async ({ gameId, name }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.unlockPurchases(cleanGameId, truncateString(name, 50));
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
-    });
-    socket.on('toggleCapitalStatus', async ({ gameId, name, isCaptured }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.toggleCapitalStatus(cleanGameId, truncateString(name, 50), isCaptured);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('transferFactory', async ({ oldNation, newNation, factoryId }, gameId) => {
+        const cleanOld = nationName(oldNation);
+        const cleanNew = nationName(newNation);
+        await assertNations(gameId, cleanOld, cleanNew);
+        await db.transferFactory(gameId, cleanOld, cleanNew, truncateString(factoryId, 50));
     });
 
-    socket.on('buyTechToken', async ({ gameId, name }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.buyTechToken(cleanGameId, truncateString(name, 50));
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('updateFactoryDamage', async ({ name, factoryId, damageDelta, isUndo, isFree }, gameId) => {
+        const cleanName = nationName(name);
+        const delta = Number(damageDelta);
+        if (!Number.isInteger(delta) || Math.abs(delta) > 100) throw new Error('Invalid damage value');
+        // Free damage edits bypass repair costs: Game Master only.
+        if (isFree && !isBanker(gameId)) throw new Error('Banker authorization required');
+        await assertNations(gameId, cleanName);
+        await db.updateFactoryDamage(gameId, cleanName, truncateString(factoryId, 50), delta, !!isUndo, !!isFree);
     });
 
-    socket.on('refundTechToken', async ({ gameId, name }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.refundTechToken(cleanGameId, truncateString(name, 50));
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('lockPurchases', async ({ name, logMessage }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.lockPurchases(gameId, cleanName, truncateString(logMessage, 500));
     });
 
-    socket.on('rollForTech', async ({ gameId, name, chartId }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.rollForTech(cleanGameId, truncateString(name, 50), chartId);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('unlockPurchases', async ({ name }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.unlockPurchases(gameId, cleanName);
+    }, { bankerOnly: true });
+
+    on('toggleCapitalStatus', async ({ name, isCaptured }, gameId) => {
+        const cleanName = nationName(name);
+        // Liberating is a normal game action; forcing a capture is an admin override.
+        if (isCaptured && !isBanker(gameId)) throw new Error('Banker authorization required');
+        await assertNations(gameId, cleanName);
+        await db.toggleCapitalStatus(gameId, cleanName, !!isCaptured);
     });
 
-    socket.on('toggleNationalObjective', async ({ gameId, name, objectiveId, isActive }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.toggleNationalObjective(cleanGameId, truncateString(name, 50), truncateString(objectiveId, 100), isActive);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('buyTechToken', async ({ name }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.buyTechToken(gameId, cleanName);
     });
 
-    socket.on('toggleTechnology', async ({ gameId, name, techName, isActive }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.toggleTechnology(cleanGameId, truncateString(name, 50), truncateString(techName, 100), isActive);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('refundTechToken', async ({ name }, gameId) => {
+        const cleanName = nationName(name);
+        await assertNations(gameId, cleanName);
+        await db.refundTechToken(gameId, cleanName);
     });
 
-    socket.on('updateChinaTerritories', async ({ gameId, territories }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.updateChinaTerritories(cleanGameId, territories);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('rollForTech', async ({ name, chartId }, gameId) => {
+        const cleanName = nationName(name);
+        const chart = Number(chartId);
+        if (chart !== 1 && chart !== 2) throw new Error('Invalid research chart');
+        await assertNations(gameId, cleanName);
+        await db.rollForTech(gameId, cleanName, chart);
     });
 
-    socket.on('mobilizeChinaInfantry', async ({ gameId, placements }) => {
-        try {
-            const cleanGameId = truncateString(gameId, 50);
-            await db.mobilizeChinaInfantry(cleanGameId, placements);
-            await broadcastGameState(io, cleanGameId);
-        } catch(e) { console.error(e) }
+    on('toggleNationalObjective', async ({ name, objectiveId, isActive }, gameId) => {
+        const cleanName = nationName(name);
+        const cleanObjective = truncateString(objectiveId, 100);
+        if (!NATIONAL_OBJECTIVES[cleanName] || !NATIONAL_OBJECTIVES[cleanName][cleanObjective]) throw new Error('Unknown objective');
+        await assertNations(gameId, cleanName);
+        await db.toggleNationalObjective(gameId, cleanName, cleanObjective, !!isActive);
+    });
+
+    on('toggleTechnology', async ({ name, techName, isActive }, gameId) => {
+        const cleanName = nationName(name);
+        const cleanTech = truncateString(techName, 100);
+        if (!ALL_TECHS.includes(cleanTech)) throw new Error('Unknown technology');
+        await assertNations(gameId, cleanName);
+        await db.toggleTechnology(gameId, cleanName, cleanTech, !!isActive);
+    });
+
+    on('updateChinaTerritories', async ({ territories }, gameId) => {
+        await db.updateChinaTerritories(gameId, territories);
+    });
+
+    on('mobilizeChinaInfantry', async ({ placements }, gameId) => {
+        await db.mobilizeChinaInfantry(gameId, placements);
     });
 };

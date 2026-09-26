@@ -1,9 +1,9 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
-import { Lock, Unlock, Swords, ShoppingCart, RotateCcw, Flag } from 'lucide-react';
+import { Lock, Unlock, Swords, ShoppingCart, RotateCcw } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { cn } from '../../../utils/styles';
-import { getUnitCost } from '../utils/techEffects';
+import { getUnitCost, getFactoryProductionBonus } from '../utils/techEffects';
 import MobilizationPanel from './panels/MobilizationPanel';
 import FactoriesPanel from './panels/FactoriesPanel';
 import TechPanel from './panels/TechPanel';
@@ -123,7 +123,7 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
   const hasIncreasedProd = Array.isArray(nation.tech) && nation.tech.includes('Increased Factory Production');
   const totalCapacity = factories.reduce((sum, f) => {
       const baseCap = parseInt(f.capacity || 0);
-      const bonus = hasIncreasedProd ? 2 : 0;
+      const bonus = getFactoryProductionBonus(f, hasIncreasedProd);
       const damage = parseInt(f.damage || 0);
       return sum + Math.max(0, baseCap + bonus - damage);
   }, 0);
@@ -152,9 +152,18 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
       if (unit === 'Industrial Complex' && dQty > 0) {
           const tName = prompt("Enter the Territory name for this new Industrial Complex:");
           if (!tName) return; 
-          const cap = prompt(`Enter the base IPC Value of ${tName}:`);
-          if (!cap) return;
-          addFactory(nation.name, tName, parseInt(cap));
+          const cap = parseInt(prompt(`Enter the base IPC Value of ${tName}:`), 10);
+          if (!Number.isInteger(cap) || cap < 1 || cap > 20) return alert("Enter a territory value between 1 and 20.");
+          addFactory(nation.name, tName, cap);
+      }
+
+      // Removing a purchased complex from the cart also removes the factory it created
+      // (new factories are appended, so it is the last one in the list).
+      if (unit === 'Industrial Complex' && dQty < 0) {
+          const lastFactory = factories[factories.length - 1];
+          if (lastFactory && window.confirm(`Also remove the Industrial Complex in ${lastFactory.name}?`)) {
+              removeFactory(nation.name, lastFactory.id);
+          }
       }
 
       const newBank = nation.bank - costDiff;

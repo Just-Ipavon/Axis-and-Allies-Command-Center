@@ -12,6 +12,7 @@ initDb();
 
 module.exports = {
     db,
+    withLock: db.withLock,
     ...gameModel,
     ...nationModel,
     ...factoryModel,

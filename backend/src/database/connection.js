@@ -19,4 +19,27 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
 });
 
+
+// Promise helpers. `run` resolves with the statement context ({ changes, lastID }).
+db.runAsync = (sql, params = []) => new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+        if (err) reject(err); else resolve(this);
+    });
+});
+db.getAsync = (sql, params = []) => new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
+});
+db.allAsync = (sql, params = []) => new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+});
+
+// Serializes state-changing operations so that read-modify-write sequences
+// (and explicit transactions) from different sockets never interleave.
+let queue = Promise.resolve();
+db.withLock = (fn) => {
+    const result = queue.then(() => fn());
+    queue = result.catch(() => {});
+    return result;
+};
+
 module.exports = db;

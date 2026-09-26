@@ -1,4 +1,3 @@
-import React from 'react';
 import { cn } from '../../../../utils/styles';
 
 const TECH_CHART_1 = [
@@ -42,7 +41,7 @@ export default function TechPanel({
             >
               Buy (+1 Token: 5 IPC)
             </button>
-            {(nation.research_tokens || 0) > 0 && (
+            {(nation.research_tokens || 0) - (nation.tokens_rolled || 0) > 0 && (
               <button 
                 onClick={() => refundTechToken(nation.name)}
                 className="text-[9px] bg-red-800 hover:bg-red-700 text-white font-bold py-1 px-2 uppercase shadow-sm border border-black"

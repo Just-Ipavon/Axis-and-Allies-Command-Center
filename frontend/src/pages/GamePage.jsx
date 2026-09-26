@@ -16,10 +16,11 @@ export default function GamePage() {
     resetGame, 
     currentTurn, 
     verifyMasterPassword, 
-    undoTurn 
+    undoTurn,
+    serverTimeOffset
   } = useGameStore();
 
-  const timerDisplay = useTimer(gameData);
+  const timerDisplay = useTimer(gameData, serverTimeOffset);
 
   if (!gameData) {
     return (
