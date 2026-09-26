@@ -1,6 +1,28 @@
-import React from 'react';
+import { useState } from 'react';
 import { Flag, Trash2 } from 'lucide-react';
 import { cn } from '../../../../utils/styles';
+import { getFactoryProductionBonus, repairKey } from '../../utils/techEffects';
+
+// Admin damage editor: edits a local draft and sends the new value on blur/Enter.
+function DamageInput({ factory, onCommit }) {
+  const [draft, setDraft] = useState(null);
+  const commit = () => {
+    if (draft === null) return;
+    const newVal = Math.max(0, Math.min(parseInt(draft, 10) || 0, factory.capacity * 2));
+    setDraft(null);
+    if (newVal !== factory.damage) onCommit(newVal);
+  };
+  return (
+    <input 
+      type="number" 
+      className="w-10 h-5 bg-black/40 border border-amber-500 text-amber-500 font-bold px-1 text-center outline-none text-[10px]"
+      value={draft ?? factory.damage}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+    />
+  );
+}
 
 export default function FactoriesPanel({
   nation,
@@ -8,7 +30,6 @@ export default function FactoriesPanel({
   purchasesLocked,
   isBanker,
   factories,
-  hasIncreasedProd,
   adminEditMode,
   transferFactoryData,
   setTransferFactoryData,
@@ -22,7 +43,8 @@ export default function FactoriesPanel({
   currentPurchases,
   addFactory,
   removeFactory,
-  updateFactoryDamage,
+  bombFactory,
+  setFactoryDamage,
   transferFactory,
   handleRepairQueue
 }) {
@@ -35,7 +57,9 @@ export default function FactoriesPanel({
             onClick={() => {
               const tName = prompt("Add Free Setup Factory Location:");
               if(!tName) return;
-              addFactory(nation.name, tName, parseInt(prompt("Territory IPC Value:") || 1));
+              const cap = parseInt(prompt("Territory IPC Value:") || '1', 10);
+              if (!Number.isInteger(cap) || cap < 1 || cap > 20) return alert("Enter a territory value between 1 and 20.");
+              addFactory(nation.name, tName, cap);
             }} 
             className="text-[10px] bg-black/30 text-white px-2 py-0.5 hover:bg-black/50 active:scale-95 border border-current"
           >
@@ -105,7 +129,7 @@ export default function FactoriesPanel({
               onClick={() => {
                 const limitedValue = Math.min(bombingRaidValue, bombingRaidData.maxDamage - bombingRaidData.currentDamage);
                 if (limitedValue > 0) {
-                  updateFactoryDamage(nation.name, bombingRaidData.id, limitedValue);
+                  bombFactory(nation.name, bombingRaidData.id, limitedValue);
                 }
                 setBombingRaidData(null);
                 setBombingRaidValue(0);
@@ -125,7 +149,8 @@ export default function FactoriesPanel({
             <div className="flex flex-col leading-tight min-w-0">
               <span className="font-bold text-[11px] truncate">{f.name}</span>
               <div className="flex gap-2 items-center opacity-60 text-[9px] uppercase font-bold tracking-tighter">
-                <span>Cap {hasIncreasedProd ? `${f.capacity} + 2` : f.capacity}</span>
+                <span>Cap {getFactoryProductionBonus(f, nation.tech) ? `${f.capacity} + 2` : f.capacity}</span>
+                {f.builtThisTurn && <span className="text-amber-400">New: produces next turn</span>}
                 <span className="w-1 h-1 bg-current rounded-full opacity-20"></span>
                 <span>Max Dmg {f.capacity * 2}</span>
               </div>
@@ -133,15 +158,9 @@ export default function FactoriesPanel({
             
             <div className="flex items-center gap-1 justify-between sm:justify-end shrink-0 sm:ml-auto w-full sm:w-auto border-t sm:border-t-0 border-white/10 pt-1.5 sm:pt-0">
               {adminEditMode ? (
-                <input 
-                  type="number" 
-                  className="w-10 h-5 bg-black/40 border border-amber-500 text-amber-500 font-bold px-1 text-center outline-none text-[10px]"
-                  value={f.damage}
-                  onChange={(e) => {
-                    const newVal = parseInt(e.target.value) || 0;
-                    const delta = newVal - f.damage;
-                    updateFactoryDamage(nation.name, f.id, delta, false, true); 
-                  }}
+                <DamageInput
+                  factory={f}
+                  onCommit={(damage) => setFactoryDamage(nation.name, f.id, damage)}
                 />
               ) : (
                 <div className={cn("font-black px-1.5 py-0.5 border text-[10px] min-w-[24px] text-center rounded-sm tracking-tighter", 
@@ -171,10 +190,10 @@ export default function FactoriesPanel({
                     <Trash2 size={10} />
                   </button>
                   
-                  {(!purchasesLocked || isBanker) && f.damage > 0 && (
+                  {!purchasesLocked && (f.damage > 0 || currentPurchases[repairKey(f.id)] > 0) && (
                     <div className="flex items-center gap-0.5 bg-green-950/40 px-1 py-0.5 border border-green-500/30 rounded-sm ml-1">
                       <button onClick={() => handleRepairQueue(f.id, -1)} className="w-4 h-4 bg-black/40 text-white flex justify-center items-center hover:bg-black/60 active:scale-95 text-[10px]">-</button>
-                      <span className="text-[10px] font-black w-3 text-center text-green-400">{currentPurchases[`repair_${f.id}`] || 0}</span>
+                      <span className="text-[10px] font-black w-3 text-center text-green-400">{currentPurchases[repairKey(f.id)] || 0}</span>
                       <button onClick={() => handleRepairQueue(f.id, 1)} className="w-4 h-4 bg-white/10 text-white flex justify-center items-center hover:bg-white/20 active:scale-95 text-[10px]">+</button>
                     </div>
                   )}

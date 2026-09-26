@@ -1,4 +1,3 @@
-import React from 'react';
 import { cn } from '../../../../utils/styles';
 import { ALL_OBJECTIVES } from '../../../../constants/gameData';
 

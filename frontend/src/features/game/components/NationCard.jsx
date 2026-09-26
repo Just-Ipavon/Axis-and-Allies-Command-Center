@@ -1,28 +1,24 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
-import { Lock, Unlock, Swords, ShoppingCart, RotateCcw, Flag } from 'lucide-react';
+import { Lock, Unlock, Swords, ShoppingCart, RotateCcw } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { cn } from '../../../utils/styles';
-import { getUnitCost } from '../utils/techEffects';
+import { getCartCapacity, countMobilizedUnits } from '../utils/techEffects';
 import MobilizationPanel from './panels/MobilizationPanel';
 import FactoriesPanel from './panels/FactoriesPanel';
 import TechPanel from './panels/TechPanel';
 import ObjectivesPanel from './panels/ObjectivesPanel';
 import ChinaPanel from './panels/ChinaPanel';
-import { ALL_OBJECTIVES } from '../../../constants/gameData';
-
-
-const FLAG_MAP = {
-  'USSR': '/flags/Russians_large.png',
-  'Germany': '/flags/Germans_large.png',
-  'UK': '/flags/British_large.png',
-  'Japan': '/flags/Japanese_large.png',
-  'USA': '/flags/Americans_large.png',
-  'Italy': '/flags/Italians_large.png',
-};
+import { ALL_OBJECTIVES, AXIS, ALLIES, FLAG_MAP, FACTION_COLORS } from '../../../constants/gameData';
 
 export default function NationCard({ nation, isEditable, gameVersion }) {
-  const { updateNationBank, conquerTerritory, collectIncome: collectIncomeStore, currentTurn, role, addFactory, removeFactory, updateFactoryDamage, transferFactory, verifyMasterPassword, lockPurchases, unlockPurchases, toggleCapitalStatus, nations, buyTechToken, refundTechToken, rollForTech, toggleNationalObjective, toggleTechnology, gameData } = useGameStore();
+  const {
+    currentTurn, role, nations, gameData, verifyMasterPassword,
+    setPlayerName, adjustPurchase, adjustRepair, adminSetEconomy, conquerTerritory,
+    collectIncome: collectIncomeStore, lockPurchases, unlockPurchases, toggleCapitalStatus,
+    addFactory, removeFactory, bombFactory, setFactoryDamage, transferFactory,
+    buyTechToken, refundTechToken, rollForTech, toggleNationalObjective, toggleTechnology
+  } = useGameStore();
 
   const isMyTurn = currentTurn === nation.name;
   const canCollect = isEditable && isMyTurn;
@@ -70,123 +66,58 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
           .catch(err => alert("Access Denied: " + err.message));
   };
 
-  const AXIS = ['Germany', 'Japan', 'Italy'];
-  const ALLIES = ['USSR', 'UK', 'USA'];
   const isAxis = AXIS.includes(nation.name);
   const activeNations = (nations || []).map(n => n.name);
   const activeAxis = AXIS.filter(name => activeNations.includes(name));
   const activeAllies = ALLIES.filter(name => activeNations.includes(name));
   const enemyAlliance = isAxis ? activeAllies : activeAxis;
 
-
-
-  const handlePlayerNameChange = (e) => {
-      setLocalPlayerName(e.target.value);
-  };
-
   const handlePlayerNameBlur = () => {
       if (!isEditable) return;
-      if (localPlayerName !== nation.player_name) {
-          updateNationBank(nation.name, nation.income, nation.bank, nation.purchases, localPlayerName);
+      if (localPlayerName !== (nation.player_name || '')) {
+          setPlayerName(nation.name, localPlayerName);
       }
   };
 
-  const handleIncomeManualChange = (e) => {
-      let val = e.target.value;
-      if (val === '') setLocalIncome('');
-      else setLocalIncome(parseInt(val) || 0);
-  };
+  const parseManualValue = (val) => (val === '' ? '' : Math.max(0, parseInt(val, 10) || 0));
 
-  const handleIncomeManualBlur = () => {
-      if (!isEditable || (purchasesLocked && !isBanker)) return;
-      const finalVal = localIncome === '' ? 0 : localIncome;
-      if (finalVal !== nation.income) {
-          updateNationBank(nation.name, finalVal, nation.bank, nation.purchases, nation.player_name);
-      }
-  };
-
-  const handleBankManualChange = (e) => {
-      let val = e.target.value;
-      if (val === '') setLocalBank('');
-      else setLocalBank(parseInt(val) || 0);
-  };
-
-  const handleBankManualBlur = () => {
-      if (!isEditable || (purchasesLocked && !isBanker)) return;
-      const finalVal = localBank === '' ? 0 : localBank;
-      if (finalVal !== nation.bank) {
-          updateNationBank(nation.name, nation.income, finalVal, nation.purchases, nation.player_name);
+  // Manual economy edits are a Game Master override (adminEditMode verified the master password).
+  const handleEconomyBlur = () => {
+      if (!adminEditMode) return;
+      const income = localIncome === '' ? 0 : localIncome;
+      const bank = localBank === '' ? 0 : localBank;
+      if (income !== nation.income || bank !== nation.bank) {
+          adminSetEconomy(nation.name, income, bank);
       }
   };
 
   const factories = nation.factories || [];
-  const hasIncreasedProd = Array.isArray(nation.tech) && nation.tech.includes('Increased Factory Production');
-  const totalCapacity = factories.reduce((sum, f) => {
-      const baseCap = parseInt(f.capacity || 0);
-      const bonus = hasIncreasedProd ? 2 : 0;
-      const damage = parseInt(f.damage || 0);
-      return sum + Math.max(0, baseCap + bonus - damage);
-  }, 0);
+  const totalCapacity = getCartCapacity(factories, currentPurchases, nation.tech, !!nation.purchases_locked);
+  const totalPurchased = countMobilizedUnits(currentPurchases);
 
-  let totalPurchased = 0;
-  Object.entries(currentPurchases).forEach(([unit, qty]) => {
-      if (unit !== 'Industrial Complex' && !unit.startsWith('repair_')) totalPurchased += qty;
-  });
-
+  // The server validates cost, bank and capacity; these checks only avoid pointless requests.
   const handlePurchase = (unit, dQty) => {
       if (!isEditable || (purchasesLocked && !isBanker)) return;
-      const currentQty = currentPurchases[unit] || 0;
-      const newQty = currentQty + dQty;
-
-      if (newQty < 0) return; // can't buy negative
-
-      if (dQty > 0 && unit !== 'Industrial Complex') {
-          if (totalPurchased >= totalCapacity) {
-              return alert(`Maximum production capacity (${totalCapacity}) reached! You must remove items or build more capacity to purchase more units!`);
-          }
-      }
-
-      const costDiff = getUnitCost(unit, nation.tech) * dQty;
-      if (nation.bank - costDiff < 0) return alert("Not enough IPCs in Bank!"); 
+      if ((currentPurchases[unit] || 0) + dQty < 0) return;
 
       if (unit === 'Industrial Complex' && dQty > 0) {
-          const tName = prompt("Enter the Territory name for this new Industrial Complex:");
-          if (!tName) return; 
-          const cap = prompt(`Enter the base IPC Value of ${tName}:`);
-          if (!cap) return;
-          addFactory(nation.name, tName, parseInt(cap));
+          const territoryName = prompt("Enter the Territory name for this new Industrial Complex:");
+          if (!territoryName) return;
+          const capacity = parseInt(prompt(`Enter the base IPC Value of ${territoryName}:`), 10);
+          if (!Number.isInteger(capacity) || capacity < 1 || capacity > 20) return alert("Enter a territory value between 1 and 20.");
+          adjustPurchase(nation.name, unit, dQty, { territoryName, capacity });
+          return;
       }
-
-      const newBank = nation.bank - costDiff;
-      const newPurchases = { ...currentPurchases, [unit]: newQty };
-
-      updateNationBank(nation.name, nation.income, newBank, newPurchases, nation.player_name);
+      if (dQty > 0 && unit !== 'Industrial Complex' && totalPurchased >= totalCapacity) {
+          return alert(`Maximum production capacity (${totalCapacity}) reached! You must remove items or build more capacity to purchase more units!`);
+      }
+      adjustPurchase(nation.name, unit, dQty);
   };
 
   const handleRepairQueue = (factoryId, dQty) => {
-      if (!isEditable || (purchasesLocked && !isBanker)) return;
-      const key = `repair_${factoryId}`;
-      const currentQty = currentPurchases[key] || 0;
-      const newQty = currentQty + dQty;
-
-      if (newQty < 0) return;
-      
-      const factory = factories.find(f => f.id === factoryId);
-      if (!factory) return;
-      if (newQty > factory.damage) return; // can't repair more than the damage it has
-
-      const oldCost = hasIncreasedProd ? Math.ceil(currentQty / 2) : currentQty;
-      const newCost = hasIncreasedProd ? Math.ceil(newQty / 2) : newQty;
-      const costDiff = newCost - oldCost;
-      if (nation.bank - costDiff < 0) return alert("Not enough IPCs in Bank!"); 
-
-      const newBank = nation.bank - costDiff;
-      const newPurchases = { ...currentPurchases, [key]: newQty };
-
-      updateNationBank(nation.name, nation.income, newBank, newPurchases, nation.player_name);
+      if (!isEditable || purchasesLocked) return;
+      adjustRepair(nation.name, factoryId, dQty);
   };
-
-
 
   const handleConquer = () => {
       if (!battleVictim) return alert("Select a target nation");
@@ -196,53 +127,24 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
 
   const handleConfirmCart = () => {
       if (!isEditable || purchasesLocked) return;
-      const items = Object.entries(nation.purchases || {})
-          .filter((entry) => entry[1] > 0)
-          .map(([key, qty]) => {
-              if (key.startsWith('repair_')) {
-                  const fName = factories.find(f => f.id === key.split('_')[1])?.name || 'Factory';
-                  return `${qty}x Repair in ${fName}`;
-              }
-              return `${qty}x ${key}`;
-          })
-          .join(', ');
-      
-      const log = `${nation.name} confirms purchases: ${items}`;
-      lockPurchases(nation.name, log);
+      lockPurchases(nation.name);
   };
 
-   const collectIncome = () => {
-       if (!isEditable) return;
-       
-       if (isCapitalCaptured) {
-           const log = `${nation.name} skips income collection (Capital Captured).`;
-           collectIncomeStore(nation.name, log);
-           return;
-       }
-
-       if (!hasPurchases) {
-           if (!window.confirm("The cart is empty. Are you sure you want to collect income and pass the turn without mobilizing troops?")) {
-               return;
-           }
-       }
-       
-       const log = `${nation.name} collects income (${nation.income} IPC). Units mobilized and funds secured.`;
-       collectIncomeStore(nation.name, log);
-   };
+  const collectIncome = () => {
+      if (!isEditable) return;
+      if (!isCapitalCaptured && !hasPurchases &&
+          !window.confirm("The cart is empty. Are you sure you want to collect income and pass the turn without mobilizing troops?")) {
+          return;
+      }
+      collectIncomeStore(nation.name);
+  };
 
   const chinaControlledCount = gameData?.china_territories?.length || 0;
   const objectivesCount = ALL_OBJECTIVES[nation.name]?.length || 0;
 
   const isAnniversary = gameVersion && gameVersion.startsWith('anniversary');
 
-  const colorClasses = {
-      'USSR': 'bg-faction-ussr text-white border-vintage-text',
-      'Germany': 'bg-faction-germany text-white border-vintage-text',
-      'UK': 'bg-faction-uk text-black border-vintage-text',
-      'Japan': 'bg-faction-japan text-white border-vintage-text',
-      'USA': 'bg-faction-usa text-white border-vintage-text',
-      'Italy': 'bg-faction-italy text-white border-vintage-text',
-  }[nation.name] || 'bg-vintage-paper';
+  const colorClasses = FACTION_COLORS[nation.name] || 'bg-vintage-paper';
 
   return (
     <div className={cn("p-4 border-2 shadow-[4px_4px_0_0_rgba(43,42,38,1)] flex flex-col gap-4", colorClasses)}>
@@ -275,7 +177,7 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
                  type="text" 
                  placeholder="Player Name" 
                  value={localPlayerName} 
-                 onChange={handlePlayerNameChange}
+                 onChange={(e) => setLocalPlayerName(e.target.value)}
                  onBlur={handlePlayerNameBlur}
                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
                  className="bg-black/20 text-sm p-1 outline-none w-32 border-b border-dashed border-current focus:bg-black/30 placeholder-current/50 text-center sm:text-left" 
@@ -295,8 +197,8 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
                  type="number" 
                  className="text-3xl font-display w-24 bg-transparent outline-none text-right border-b border-dashed border-red-500 focus:bg-black/10" 
                  value={localBank} 
-                 onChange={handleBankManualChange} 
-                 onBlur={handleBankManualBlur}
+                 onChange={(e) => setLocalBank(parseManualValue(e.target.value))} 
+                 onBlur={handleEconomyBlur}
                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
              />
           ) : (
@@ -314,8 +216,8 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
                    type="number" 
                    className="text-xl font-bold w-16 bg-transparent outline-none border-b border-dashed border-red-500 focus:bg-black/10" 
                    value={localIncome} 
-                   onChange={handleIncomeManualChange} 
-                   onBlur={handleIncomeManualBlur}
+                   onChange={(e) => setLocalIncome(parseManualValue(e.target.value))} 
+                   onBlur={handleEconomyBlur}
                    onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
                />
             ) : (
@@ -376,7 +278,6 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
               totalCapacity={totalCapacity}
               currentPurchases={currentPurchases}
               handlePurchase={handlePurchase}
-              hasIncreasedProd={hasIncreasedProd}
           />
       </div>
 
@@ -387,7 +288,6 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
           purchasesLocked={purchasesLocked}
           isBanker={isBanker}
           factories={factories}
-          hasIncreasedProd={hasIncreasedProd}
           adminEditMode={adminEditMode}
           transferFactoryData={transferFactoryData}
           setTransferFactoryData={setTransferFactoryData}
@@ -401,7 +301,8 @@ export default function NationCard({ nation, isEditable, gameVersion }) {
           currentPurchases={currentPurchases}
           addFactory={addFactory}
           removeFactory={removeFactory}
-          updateFactoryDamage={updateFactoryDamage}
+          bombFactory={bombFactory}
+          setFactoryDamage={setFactoryDamage}
           transferFactory={transferFactory}
           handleRepairQueue={handleRepairQueue}
       />

@@ -1,23 +1,8 @@
-import React from 'react';
 import { cn } from '../../../../utils/styles';
 
-const TECH_CHART_1 = [
-  'Advanced Artillery',
-  'Rockets',
-  'Paratroopers',
-  'Increased Factory Production',
-  'War Bonds',
-  'Mechanized Infantry'
-];
+import { TECH_CHARTS, RULES } from '../../../../constants/gameData';
 
-const TECH_CHART_2 = [
-  'Super Submarines',
-  'Jet Fighters',
-  'Improved Shipyards',
-  'Radar',
-  'Long-Range Aircraft',
-  'Heavy Bombers'
-];
+const [TECH_CHART_1, TECH_CHART_2] = [TECH_CHARTS[1], TECH_CHARTS[2]];
 
 export default function TechPanel({
   nation,
@@ -37,12 +22,12 @@ export default function TechPanel({
           <div className="flex flex-wrap gap-1 justify-end">
             <button 
               onClick={() => buyTechToken(nation.name)} 
-              disabled={nation.bank < 5}
+              disabled={nation.bank < RULES.researchTokenCost}
               className="text-[9px] bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white font-bold py-1 px-2 uppercase shadow-sm border border-black"
             >
-              Buy (+1 Token: 5 IPC)
+              Buy (+1 Token: {RULES.researchTokenCost} IPC)
             </button>
-            {(nation.research_tokens || 0) > 0 && (
+            {(nation.research_tokens || 0) - (nation.tokens_rolled || 0) > 0 && (
               <button 
                 onClick={() => refundTechToken(nation.name)}
                 className="text-[9px] bg-red-800 hover:bg-red-700 text-white font-bold py-1 px-2 uppercase shadow-sm border border-black"

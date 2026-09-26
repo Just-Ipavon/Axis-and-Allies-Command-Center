@@ -1,31 +1,12 @@
-const db = require('../database/connection');
+const { getObjective } = require('../config/gameConfig');
+const { getNation, updateNation } = require('./helpers');
 
-const toggleNationalObjective = (gameId, name, objectiveId, isActive) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT active_objectives FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
-            if (err || !nation) return reject(err || new Error('Nation not found'));
-            
-            let objectives = [];
-            try { objectives = JSON.parse(nation.active_objectives || '[]'); } catch(e){}
-            
-            if (isActive) {
-                if (!objectives.includes(objectiveId)) {
-                    objectives.push(objectiveId);
-                }
-            } else {
-                objectives = objectives.filter(o => o !== objectiveId);
-            }
-            
-            db.run(
-                'UPDATE nations SET active_objectives = ? WHERE game_id = ? AND name = ?',
-                [JSON.stringify(objectives), gameId, name],
-                (err2) => {
-                    if (err2) reject(err2);
-                    else resolve(true);
-                }
-            );
-        });
-    });
+const toggleNationalObjective = async (gameId, name, objectiveId, isActive) => {
+    if (!getObjective(name, objectiveId)) throw new Error('Unknown objective');
+    const nation = await getNation(gameId, name);
+    const others = nation.active_objectives.filter(o => o !== objectiveId);
+    await updateNation(gameId, name, { active_objectives: isActive ? [...others, objectiveId] : others });
+    return true;
 };
 
 module.exports = {

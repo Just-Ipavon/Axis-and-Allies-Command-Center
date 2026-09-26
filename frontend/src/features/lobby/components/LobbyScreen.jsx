@@ -4,7 +4,7 @@ import { useGameStore } from '../../../store/gameStore';
 import { cn } from '../../../utils/styles';
 
 export default function LobbyScreen() {
-  const { setGameId, availableRooms, fetchRooms, connected, deleteRoom } = useGameStore();
+  const { setGameId, availableRooms, fetchRooms, lobbyConnected: connected, deleteRoom } = useGameStore();
   const [directJoinId, setDirectJoinId] = useState('');
 
   const [isDark, setIsDark] = useState(() => {
@@ -86,7 +86,8 @@ export default function LobbyScreen() {
   const handleJoin = async (room) => {
       let pwd = '';
       if (room.hasPassword) {
-          pwd = prompt(`Enter password for ${room.id}:`) || '';
+          pwd = prompt(`Enter password for ${room.id}:`);
+          if (pwd === null) return;
       }
       try {
           await setGameId({ gameId: room.id, password: pwd });

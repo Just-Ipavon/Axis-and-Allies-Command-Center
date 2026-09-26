@@ -1,5 +1,11 @@
 import { RotateCcw } from 'lucide-react';
 
+// SQLite CURRENT_TIMESTAMP is UTC formatted as "YYYY-MM-DD HH:MM:SS" (no timezone marker).
+const formatLogTime = (timestamp) => {
+  const date = new Date(String(timestamp).replace(' ', 'T') + 'Z');
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
+};
+
 export default function GameSidebar({ role, logs, verifyMasterPassword, resetGame, gameVersion }) {
   return (
     <div className="flex flex-col gap-4">
@@ -11,7 +17,7 @@ export default function GameSidebar({ role, logs, verifyMasterPassword, resetGam
           {logs.map((log) => (
             <div key={log.id} className="border-b border-vintage-border border-dashed pb-1">
               <span className="opacity-50 text-xs">
-                [{new Date(log.timestamp).toLocaleTimeString()}]
+                [{formatLogTime(log.timestamp)}]
               </span>
               <br />
               {log.message}

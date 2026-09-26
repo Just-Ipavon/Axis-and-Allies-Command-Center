@@ -1,16 +1,7 @@
 import { useState } from 'react';
 import { Shield, Clock, LogOut, RotateCcw, Sun, Moon } from 'lucide-react';
 import { cn } from '../../../utils/styles';
-import { getTurnOrder } from '../../../constants/gameData';
-
-const FLAG_MAP = {
-  'USSR': '/flags/Russians_large.png',
-  'Germany': '/flags/Germans_large.png',
-  'UK': '/flags/British_large.png',
-  'Japan': '/flags/Japanese_large.png',
-  'USA': '/flags/Americans_large.png',
-  'Italy': '/flags/Italians_large.png',
-};
+import { getTurnOrder, getVersionLabel, FLAG_MAP } from '../../../constants/gameData';
 
 export default function GameHeader({ 
   gameData, 
@@ -43,11 +34,7 @@ export default function GameHeader({
     }
   };
 
-  const getHeaderTitle = () => {
-    if (version === 'anniversary_1941') return 'Axis & Allies Anniversary (1941)';
-    if (version === 'anniversary_1942') return 'Axis & Allies Anniversary (1942)';
-    return 'Axis & Allies 1942';
-  };
+  const getHeaderTitle = () => getVersionLabel(version);
 
   return (
     <header className="flex flex-col md:flex-row justify-between items-center border-b-4 border-vintage-text pb-4 gap-4">

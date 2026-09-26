@@ -1,4 +1,3 @@
-import React from 'react';
 
 export const BaseIcon = ({ children, className = '', size = 24 }) => (
   <svg

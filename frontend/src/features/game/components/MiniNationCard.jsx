@@ -1,23 +1,8 @@
 import { cn } from '../../../utils/styles';
-
-const FLAG_MAP = {
-  'USSR': '/flags/Russians_large.png',
-  'Germany': '/flags/Germans_large.png',
-  'UK': '/flags/British_large.png',
-  'Japan': '/flags/Japanese_large.png',
-  'USA': '/flags/Americans_large.png',
-  'Italy': '/flags/Italians_large.png',
-};
+import { FLAG_MAP, FACTION_COLORS } from '../../../constants/gameData';
 
 export default function MiniNationCard({ nation }) {
-  const colorClasses = {
-      'USSR': 'bg-faction-ussr text-white border-vintage-text',
-      'Germany': 'bg-faction-germany text-white border-vintage-text',
-      'UK': 'bg-faction-uk text-black border-vintage-text',
-      'Japan': 'bg-faction-japan text-white border-vintage-text',
-      'USA': 'bg-faction-usa text-white border-vintage-text',
-      'Italy': 'bg-faction-italy text-white border-vintage-text',
-  }[nation.name] || 'bg-vintage-paper';
+  const colorClasses = FACTION_COLORS[nation.name] || 'bg-vintage-paper';
 
   return (
     <div className={cn("p-2 border-2 shadow-[2px_2px_0_0_rgba(43,42,38,1)] flex justify-between items-center w-full", colorClasses)}>

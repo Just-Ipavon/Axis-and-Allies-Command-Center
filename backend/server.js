@@ -5,7 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const db = require('./src/models');
+const models = require('./src/models');
 
 const gameRoutes = require('./src/routes/gameRoutes');
 const socketInit = require('./src/sockets/index');
@@ -14,8 +14,15 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false, 
 }));
-app.set('trust proxy', true); 
-app.use(cors());
+// Number of reverse proxies in front of the app (trusting all of them lets clients spoof their IP).
+app.set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS || '1', 10));
+
+// The production frontend is served from this same origin; cross-origin access is
+// only granted to the configured origins (default: the Vite dev server).
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+    .split(',').map(o => o.trim()).filter(Boolean);
+const corsOptions = { origin: allowedOrigins, methods: ['GET', 'POST', 'DELETE'] };
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '50kb' }));
 
 // Rate limiting for API endpoints
@@ -37,10 +44,8 @@ app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: {
-        origin: "*", 
-        methods: ["GET", "POST"]
-    }
+    cors: corsOptions,
+    maxHttpBufferSize: 50 * 1024
 });
 
 // Initialize Sockets
@@ -51,7 +56,13 @@ app.use((req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
+// Last line of defense: log unexpected errors instead of taking every game down.
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
+process.on('uncaughtException', (err) => console.error('Uncaught exception:', err));
+
 const PORT = process.env.PORT || 1942;
-server.listen(PORT, () => {
-    console.log(`Backend server running on port ${PORT}`);
+models.ready.then(() => {
+    server.listen(PORT, () => {
+        console.log(`Backend server running on port ${PORT}`);
+    });
 });

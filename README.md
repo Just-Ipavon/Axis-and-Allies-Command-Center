@@ -107,11 +107,30 @@ Since the Backend Application simultaneously serves the compiled React build, no
 <kbd>cd frontend</kbd>
 <kbd>npm install && npm run build</kbd>
 
-<!-- 3. Final Cluster Bootstrap via PM2 process manager -->
+<!-- 3. Final Bootstrap via PM2 process manager (loads backend/.env) -->
 <kbd>cd ../backend</kbd>
 <kbd>npm install</kbd>
-<kbd>pm2 start server.js --name "axis-companion"</kbd>
+<kbd>pm2 start server.js --name "axis-companion" --node-args="--env-file=.env"</kbd>
 
 <!-- 4. Seal the dump to ensure startup at the next physical Linux machine boot -->
 <kbd>pm2 save</kbd>
 ```
+
+### Shared game rules & tests
+
+- **`shared/gameRules.mjs`** is the single source of truth for game data and rules (unit costs, turn orders, starting setups, objectives, tech charts, China, production capacity and repair costs). The backend loads it with `require` and the frontend imports it, so both always agree.
+- The server is authoritative: clients send *intents* (e.g. `adjustPurchase {unit, delta}`) and the server computes costs, capacity and bank.
+- Requires **Node.js 22.12+**.
+- Run the backend test suite (rules + end-to-end socket tests on a temporary database) with `cd backend && npm test`.
+
+### Environment variables (`backend/.env`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `1942` | HTTP / WebSocket port |
+| `PEPPER_SECRET` | public default (a warning is logged) | Secret mixed into password hashes. **Set it in production** and keep it stable. |
+| `ADMIN_OVERRIDE_PASSWORD` | unset | Optional global master password |
+| `CORS_ORIGINS` | Vite dev server | Comma-separated origins allowed cross-origin |
+| `TRUST_PROXY_HOPS` | `1` | Number of reverse proxies in front of the server |
+
+Run a single Node process: game mutations are serialized in-process, so PM2 cluster mode is not supported.

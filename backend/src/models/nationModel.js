@@ -1,357 +1,327 @@
 const db = require('../database/connection');
-const { getTurnOrder } = require('../config/gameConfig');
+const {
+    RULES,
+    isAnniversary,
+    getNextTurn,
+    getUnitCost,
+    getRepairCost,
+    getCartCapacity,
+    countMobilizedUnits,
+    getObjective,
+    isRepairKey,
+    repairKey
+} = require('../config/gameConfig');
+const { MAX_IPC, toBoundedInt, getNation, updateNation } = require('./helpers');
+const { addLog, deleteLatestLog } = require('./logModel');
+const { addFactory } = require('./factoryModel');
 
-const getNations = (gameId) => {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM nations WHERE game_id = ?', [gameId], (err, rows) => {
-            if (err) reject(err);
-            resolve(rows);
-        });
-    });
+const IC = 'Industrial Complex';
+
+const getNations = (gameId) => db.allAsync('SELECT * FROM nations WHERE game_id = ?', [gameId]);
+
+const getGameRow = async (gameId) => {
+    const game = await db.getAsync('SELECT current_turn, game_version FROM games WHERE id = ?', [gameId]);
+    if (!game) throw new Error('Game not found');
+    return game;
 };
 
-const updateNationStatus = (gameId, name, income, bank, purchases, playerName) => {
-    return new Promise((resolve, reject) => {
-        db.run(
-            'UPDATE nations SET income = ?, bank = ?, purchases = ?, player_name = ? WHERE game_id = ? AND name = ?',
-            [income, bank, JSON.stringify(purchases), playerName, gameId, name],
-            (err) => {
-                if (err) reject(err);
-                resolve(true);
-            }
-        );
-    });
+const setPlayerName = async (gameId, name, playerName) => {
+    await getNation(gameId, name);
+    await updateNation(gameId, name, { player_name: playerName });
+    return true;
 };
 
-const collectIncome = (gameId, name, logMessage) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT current_turn, game_version FROM games WHERE id = ?', [gameId], (err, game) => {
-            if (err || !game) return reject(err || new Error('Game not found'));
-            
-            db.get('SELECT bank, income, purchases, player_name, capital_captured, active_objectives FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, nation) => {
-                if (err || !nation) return reject(err || new Error('Nation not found'));
-
-                const turnOrder = getTurnOrder(game.game_version);
-                const currIdx = Math.max(0, turnOrder.indexOf(game.current_turn));
-                const nextTurn = turnOrder[(currIdx + 1) % turnOrder.length];
-
-                // Calculate Objectives bonus
-                let bonus = 0;
-                let bonusDetails = [];
-                if (game.game_version.startsWith('anniversary') && !nation.capital_captured) {
-                    try {
-                        const objectives = JSON.parse(nation.active_objectives || '[]');
-                        objectives.forEach(objId => {
-                            if (objId === 'no_ussr_2') {
-                                bonus += 10;
-                                bonusDetails.push('Soviet Expansion (+10 IPC)');
-                            } else {
-                                bonus += 5;
-                                const friendlyNames = {
-                                    'no_germany_1': 'Lebensraum (France/NW Europe/Poland/Baltic/Bulgaria)',
-                                    'no_germany_2': 'Eastern Front (Baltic/East Poland/Belorussia/Ukraine)',
-                                    'no_germany_3': 'Caucasus/Karelia Control',
-                                    'no_ussr_1': 'Archangelsk Security',
-                                    'no_japan_1': 'Greater East Asia Co-Prosperity Sphere',
-                                    'no_japan_2': 'Pacific Islands Hegemony',
-                                    'no_japan_3': 'India/Australia/Hawaii Control',
-                                    'no_uk_1': 'Japanese Territory Capture',
-                                    'no_uk_2': 'British Empire Integrity',
-                                    'no_uk_3': 'France/Balkans Liberation',
-                                    'no_italy_1': 'Mediterranean Dominance',
-                                    'no_italy_2': 'Roman Empire Revival',
-                                    'no_usa_1': 'Pacific Security Zone',
-                                    'no_usa_2': 'Western Hemisphere Security',
-                                    'no_usa_3': 'Liberation of France'
-                                };
-                                const friendlyName = friendlyNames[objId] || objId;
-                                bonusDetails.push(`${friendlyName} (+5 IPC)`);
-                            }
-                        });
-                    } catch(e) {}
-                }
-
-                db.serialize(() => {
-                    // 1. Update Game Turn & reset China reinforcements flag
-                    db.run('UPDATE games SET current_turn = ?, china_reinforcements_placed = 0 WHERE id = ?', [nextTurn, gameId]);
-
-                    // 2. Update Nation Bank & Save Purchases to last_purchases
-                    const collectedIncome = nation.capital_captured ? 0 : (nation.income + bonus);
-                    db.run(
-                        'UPDATE nations SET bank = bank + ?, last_purchases = purchases, purchases = ?, purchases_locked = 0 WHERE game_id = ? AND name = ?',
-                        [collectedIncome, JSON.stringify({}), gameId, name]
-                    );
-
-                    // 3. Log
-                    let finalLogMessage = logMessage;
-                    if (bonus > 0) {
-                        finalLogMessage = `${logMessage} (including +${bonus} IPC from National Objectives: ${bonusDetails.join(', ')})`;
-                    }
-                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, finalLogMessage]);
-
-                    // 4. Global maintenance (reset factory repairs etc)
-                    db.all('SELECT name, factories FROM nations WHERE game_id = ?', [gameId], (err, rows) => {
-                        if (err) return resolve(nextTurn);
-                        const stmt = db.prepare('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?');
-                        rows.forEach(row => {
-                            try {
-                                const f = JSON.parse(row.factories || '[]');
-                                f.forEach(fact => { fact.repairedThisTurn = 0; });
-                                stmt.run([JSON.stringify(f), gameId, row.name]);
-                            } catch(e) {}
-                        });
-                        stmt.finalize();
-
-                        // Force unlock all and reset tokens_rolled count
-                        db.run('UPDATE nations SET purchases_locked = 0, tokens_rolled = 0 WHERE game_id = ?', [gameId], () => {
-                            resolve(nextTurn);
-                        });
-                    });
-                });
-            });
-        });
-    });
+// Game Master override of the economy values.
+const adminSetEconomy = async (gameId, name, income, bank) => {
+    const cleanIncome = toBoundedInt(income, 0, MAX_IPC);
+    const cleanBank = toBoundedInt(bank, 0, MAX_IPC);
+    if (cleanIncome === null || cleanBank === null) throw new Error('Invalid income or bank value');
+    const nation = await getNation(gameId, name);
+    await updateNation(gameId, name, { income: cleanIncome, bank: cleanBank });
+    const changes = [];
+    if (nation.income !== cleanIncome) changes.push(`income ${nation.income} → ${cleanIncome}`);
+    if (nation.bank !== cleanBank) changes.push(`bank ${nation.bank} → ${cleanBank}`);
+    if (changes.length) await addLog(gameId, `🛠️ Game Master adjusted ${name}: ${changes.join(', ')}.`);
+    return true;
 };
 
-const advanceTurn = (gameId) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT current_turn, game_version FROM games WHERE id = ?', [gameId], (err, game) => {
-            if (err) return reject(err);
-            if (!game) return reject(new Error('Game not found'));
-            
-            const turnOrder = getTurnOrder(game.game_version);
-            const currIdx = Math.max(0, turnOrder.indexOf(game.current_turn));
-            const nextTurn = turnOrder[(currIdx + 1) % turnOrder.length];
-            
-            db.serialize(() => {
-                db.run('UPDATE games SET current_turn = ?, china_reinforcements_placed = 0 WHERE id = ?', [nextTurn, gameId]);
-                
-                // Reset repairedThisTurn for all factories when turn advances
-                db.all('SELECT name, factories FROM nations WHERE game_id = ?', [gameId], (err, rows) => {
-                    if (err) return resolve(nextTurn);
-                    const stmt = db.prepare('UPDATE nations SET factories = ? WHERE game_id = ? AND name = ?');
-                    rows.forEach(row => {
-                        try {
-                            const f = JSON.parse(row.factories || '[]');
-                            f.forEach(fact => { fact.repairedThisTurn = 0; });
-                            stmt.run([JSON.stringify(f), gameId, row.name]);
-                        } catch(e) {}
-                    });
-                    stmt.finalize();
-                    
-                    // Reset purchases_locked and tokens_rolled count for all nations when turn advances
-                    db.run('UPDATE nations SET purchases_locked = 0, tokens_rolled = 0 WHERE game_id = ?', [gameId], () => {
-                        resolve(nextTurn);
-                    });
-                });
-            });
-        });
-    });
+const assertCartEditable = (nation, isBanker) => {
+    if (nation.capital_captured) throw new Error('Capital captured: cannot purchase units');
+    if (nation.purchases_locked && !isBanker) throw new Error('Purchases are already confirmed');
 };
 
-const conquerTerritory = (gameId, conqueror, victim, value, targetType = 'income', liberatedFor = null) => {
-    return new Promise((resolve, reject) => {
-        const val = parseInt(value) || 0;
-        if (val <= 0) return reject(new Error("Invalid value"));
-        
-        if (targetType === 'capital') {
-            db.get('SELECT bank FROM nations WHERE game_id = ? AND name = ?', [gameId, victim], (err, victimRow) => {
-                if (err || !victimRow) return reject(err || new Error("Victim not found"));
-                const victimBank = victimRow.bank;
-                
-                db.serialize(() => {
-                    db.run('UPDATE nations SET income = CASE WHEN income - ? < 0 THEN 0 ELSE income - ? END, bank = 0, capital_captured = 1 WHERE game_id = ? AND name = ?', [val, val, gameId, victim]);
-                    db.run('UPDATE nations SET income = income + ?, bank = bank + ? WHERE game_id = ? AND name = ?', [val, victimBank, gameId, conqueror], (err) => {
-                        if(err) return reject(err);
-                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                            [gameId, `🏆 ${conqueror} conquered the CAPITAL of ${victim} worth ${val} Income, plundering ${victimBank} IPCs from their bank!`], 
-                            (err) => {
-                                if (err) reject(err);
-                                else resolve(true);
-                            }
-                        );
-                    });
-                });
-            });
-        } else {
-            db.run('UPDATE nations SET income = CASE WHEN income - ? < 0 THEN 0 ELSE income - ? END WHERE game_id = ? AND name = ?', [val, val, gameId, victim], (err) => {
-                if(err) return reject(err);
-                
-                if (liberatedFor) {
-                    db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, liberatedFor], (err) => {
-                        if(err) return reject(err);
-                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                            [gameId, `🕊️ ${conqueror} liberated territory from ${victim} for ${liberatedFor} (+${val} Income for ${liberatedFor}).`], 
-                            (err) => {
-                                if (err) reject(err);
-                                else resolve(true);
-                            }
-                        );
-                    });
-                } else {
-                    db.run('UPDATE nations SET income = income + ? WHERE game_id = ? AND name = ?', [val, gameId, conqueror], (err) => {
-                        if(err) return reject(err);
-                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                            [gameId, `${conqueror} conquered territory from ${victim} worth ${val} Income.`], 
-                            (err) => {
-                                if (err) reject(err);
-                                else resolve(true);
-                            }
-                        );
-                    });
-                }
-            });
+/**
+ * Adds or removes units from the cart. Costs, bank and production capacity are
+ * computed here, so clients only send the intent (unit + delta).
+ * Buying an Industrial Complex needs { territoryName, capacity } and creates the
+ * factory immediately, flagged as built this turn (it cannot produce yet).
+ */
+const adjustPurchase = async (gameId, name, unit, delta, { territoryName, capacity } = {}, isBanker = false) => {
+    if (!RULES.units[unit]) throw new Error('Unknown unit');
+    const step = toBoundedInt(delta, -20, 20);
+    if (!step) throw new Error('Invalid quantity');
+    if (unit === IC && Math.abs(step) !== 1) throw new Error('Industrial Complexes are bought one at a time');
+
+    const nation = await getNation(gameId, name);
+    assertCartEditable(nation, isBanker);
+
+    const purchases = { ...nation.purchases };
+    const newQty = (purchases[unit] || 0) + step;
+    if (newQty < 0) throw new Error('Nothing to remove');
+
+    if (step > 0 && unit !== IC) {
+        const capacity = getCartCapacity(nation.factories, purchases, nation.tech, nation.purchases_locked);
+        if (countMobilizedUnits(purchases) + step > capacity) {
+            throw new Error(`Maximum production capacity (${capacity}) reached`);
         }
-    });
+    }
+
+    const cost = getUnitCost(unit, nation.tech) * step;
+    if (nation.bank - cost < 0) throw new Error('Not enough IPCs in Bank');
+
+    let factories = nation.factories;
+    if (unit === IC && step > 0) {
+        factories = [...factories, await addFactory(gameId, name, territoryName, capacity, { builtThisTurn: true })];
+    } else if (unit === IC && step < 0) {
+        // Remove the most recent complex bought this turn, if it is still there.
+        const idx = factories.map(f => !!f.builtThisTurn).lastIndexOf(true);
+        if (idx !== -1) factories = factories.filter((_, i) => i !== idx);
+    }
+
+    if (newQty === 0) delete purchases[unit]; else purchases[unit] = newQty;
+    await updateNation(gameId, name, { bank: nation.bank - cost, purchases, factories });
+    return true;
 };
 
-const toggleCapitalStatus = (gameId, name, isCaptured) => {
-    return new Promise((resolve, reject) => {
-        db.run('UPDATE nations SET capital_captured = ? WHERE game_id = ? AND name = ?', [isCaptured ? 1 : 0, gameId, name], (err) => {
-            if (err) return reject(err);
-            const status = isCaptured ? 'CAPTURED' : 'LIBERATED';
-            db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                [gameId, `The capital of ${name} has been marked as ${status}.`], 
-                (err2) => {
-                    if (err2) reject(err2);
-                    else resolve(true);
-                }
-            );
-        });
-    });
+// Queues repair points for a damaged complex (paid now, applied when the cart is confirmed).
+const adjustRepair = async (gameId, name, factoryId, delta, isBanker = false) => {
+    const step = toBoundedInt(delta, -40, 40);
+    if (!step) throw new Error('Invalid quantity');
+    const nation = await getNation(gameId, name);
+    assertCartEditable(nation, isBanker);
+    if (nation.purchases_locked) throw new Error('Unlock the cart before changing repairs');
+
+    const factory = nation.factories.find(f => f.id === factoryId);
+    if (!factory) throw new Error('Factory not found');
+
+    const key = repairKey(factoryId);
+    const purchases = { ...nation.purchases };
+    const oldQty = purchases[key] || 0;
+    const newQty = oldQty + step;
+    if (newQty < 0 || newQty > (factory.damage || 0)) throw new Error('Invalid repair amount');
+
+    const cost = getRepairCost(newQty, nation.tech) - getRepairCost(oldQty, nation.tech);
+    if (nation.bank - cost < 0) throw new Error('Not enough IPCs in Bank');
+
+    if (newQty === 0) delete purchases[key]; else purchases[key] = newQty;
+    await updateNation(gameId, name, { bank: nation.bank - cost, purchases });
+    return true;
 };
 
-const undoTurn = (gameId) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT current_turn, game_version FROM games WHERE id = ?', [gameId], (err, game) => {
-            if (err || !game) return reject(err || new Error('Game not found'));
-            
-            const turnOrder = getTurnOrder(game.game_version);
-            const currIdx = Math.max(0, turnOrder.indexOf(game.current_turn));
-            const prevIdx = (currIdx - 1 + turnOrder.length) % turnOrder.length;
-            const prevTurn = turnOrder[prevIdx];
-            
-            db.run('UPDATE games SET current_turn = ?, china_reinforcements_placed = 0 WHERE id = ?', [prevTurn, gameId], (err) => {
-                if (err) return reject(err);
-                
-                db.get('SELECT bank, income, last_purchases, active_objectives FROM nations WHERE game_id = ? AND name = ?', [gameId, prevTurn], (err, row) => {
-                    if (err || !row) return resolve(prevTurn);
-                    
-                    let bonus = 0;
-                    if (game.game_version.startsWith('anniversary')) {
-                        try {
-                            const objectives = JSON.parse(row.active_objectives || '[]');
-                            objectives.forEach(objId => {
-                                if (objId === 'no_ussr_2') {
-                                    bonus += 10;
-                                } else {
-                                    bonus += 5;
-                                }
-                            });
-                        } catch(e) {}
-                    }
+// Applies (sign = -1) or reverts (sign = +1) the queued repairs on the factories.
+const shiftRepairDamage = (factories, purchases, sign) => factories.map(f => {
+    const qty = purchases[repairKey(f.id)] || 0;
+    if (!qty) return f;
+    return { ...f, damage: Math.max(0, Math.min((f.damage || 0) + sign * qty, f.capacity * 2)) };
+});
 
-                    const totalCollected = row.income + bonus;
-                    const newBank = Math.max(0, row.bank - totalCollected);
-                    const restoredPurchases = row.last_purchases || JSON.stringify({});
-                    
-                    db.serialize(() => {
-                        db.run(
-                            'UPDATE nations SET bank = ?, purchases = ?, last_purchases = NULL, purchases_locked = 0 WHERE game_id = ? AND name = ?', 
-                            [newBank, restoredPurchases, gameId, prevTurn]
-                        );
-                        
-                        // Delete the most recent 'collects income' log for this nation
-                        db.run(`DELETE FROM logs WHERE id IN (
-                            SELECT id FROM logs 
-                            WHERE game_id = ? AND message LIKE ? 
-                            ORDER BY timestamp DESC LIMIT 1
-                        )`, [gameId, `${prevTurn} collects income%`]);
-                        
-                        db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', 
-                           [gameId, `The Banker has undone the turn. Reverted +${totalCollected} IPC (Income: ${row.income}, Objectives: ${bonus}) and restored mobilization cart for ${prevTurn}.`], 
-                           () => resolve(prevTurn)
-                        );
-                    });
-                });
-            });
-        });
+const describeCart = (purchases, factories) => Object.entries(purchases)
+    .filter(([, qty]) => qty > 0)
+    .map(([key, qty]) => {
+        if (isRepairKey(key)) {
+            const factory = factories.find(f => repairKey(f.id) === key);
+            return `${qty}x Repair in ${factory ? factory.name : 'Factory'}`;
+        }
+        return `${qty}x ${key}`;
+    })
+    .join(', ');
+
+const lockPurchases = async (gameId, name) => {
+    const nation = await getNation(gameId, name);
+    if (nation.purchases_locked) return true;
+    const items = describeCart(nation.purchases, nation.factories);
+    if (!items) throw new Error('The cart is empty');
+    await updateNation(gameId, name, {
+        purchases_locked: 1,
+        factories: shiftRepairDamage(nation.factories, nation.purchases, -1)
     });
+    await addLog(gameId, `${name} confirms purchases: ${items}`);
+    return true;
 };
 
-const lockPurchases = (gameId, name, logMessage) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT purchases, factories FROM nations WHERE game_id = ? AND name = ?', [gameId, name], (err, row) => {
-            if (err) return reject(err);
-            if (!row) return resolve(true);
-
-            let purchases = {};
-            let factories = [];
-            try { purchases = JSON.parse(row.purchases || '{}'); } catch(e){}
-            try { factories = JSON.parse(row.factories || '[]'); } catch(e){}
-
-            let modifiedFactories = false;
-            let finalPurchases = {};
-
-            Object.entries(purchases).forEach(([key, qty]) => {
-                if (key.startsWith('repair_')) {
-                    const factoryId = key.split('_')[1];
-                    const factory = factories.find(f => f.id === factoryId);
-                    if (factory && qty > 0) {
-                        factory.damage = Math.max(0, factory.damage - qty);
-                        modifiedFactories = true;
-                    }
-                } else {
-                    finalPurchases[key] = qty;
-                }
-            });
-
-            db.serialize(() => {
-                if (modifiedFactories) {
-                    db.run('UPDATE nations SET purchases_locked = 1, factories = ?, purchases = ? WHERE game_id = ? AND name = ?', [JSON.stringify(factories), JSON.stringify(finalPurchases), gameId, name]);
-                } else {
-                    db.run('UPDATE nations SET purchases_locked = 1 WHERE game_id = ? AND name = ?', [gameId, name]);
-                }
-
-                if (logMessage) {
-                    db.run('INSERT INTO logs (game_id, message) VALUES (?, ?)', [gameId, logMessage], (err2) => {
-                        if (err2) reject(err2);
-                        else resolve(true);
-                    });
-                } else {
-                    resolve(true);
-                }
-            });
-        });
+const unlockPurchases = async (gameId, name) => {
+    const nation = await getNation(gameId, name);
+    if (!nation.purchases_locked) return true;
+    await updateNation(gameId, name, {
+        purchases_locked: 0,
+        factories: shiftRepairDamage(nation.factories, nation.purchases, +1)
     });
+    await deleteLatestLog(gameId, `${name} confirms purchases:%`);
+    return true;
 };
 
-const unlockPurchases = (gameId, name) => {
-    return new Promise((resolve, reject) => {
-        db.run('UPDATE nations SET purchases_locked = 0 WHERE game_id = ? AND name = ?', [gameId, name], (err) => {
-            if (err) return reject(err);
-            
-            // Delete the most recent 'conferma acquisti' log for this nation
-            db.run(`DELETE FROM logs WHERE id IN (
-                SELECT id FROM logs 
-                WHERE game_id = ? AND message LIKE ? 
-                ORDER BY timestamp DESC LIMIT 1
-            )`, [gameId, `${name} confirms purchases:%`], (err2) => {
-                if (err2) reject(err2);
-                else resolve(true);
-            });
-        });
+// End-of-turn maintenance shared by collectIncome and advanceTurn.
+const resetTurnState = async (gameId) => {
+    const rows = await db.allAsync('SELECT name FROM nations WHERE game_id = ?', [gameId]);
+    for (const { name } of rows) {
+        const nation = await getNation(gameId, name);
+        const factories = nation.factories.map(({ builtThisTurn, ...f }) => ({ ...f, repairedThisTurn: 0 }));
+        await updateNation(gameId, name, { factories, purchases_locked: 0, tokens_rolled: 0 });
+    }
+};
+
+const getObjectivesBonus = (name, activeObjectives) => {
+    let bonus = 0;
+    const details = [];
+    activeObjectives.forEach(objId => {
+        const obj = getObjective(name, objId);
+        if (!obj) return;
+        bonus += obj.reward;
+        details.push(`${obj.name} (+${obj.reward} IPC)`);
     });
+    return { bonus, details };
+};
+
+const collectIncome = async (gameId, name) => {
+    const game = await getGameRow(gameId);
+    if (game.current_turn !== name) throw new Error(`It is not ${name}'s turn`);
+    const nation = await getNation(gameId, name);
+    const captured = !!nation.capital_captured;
+    const hasCart = Object.values(nation.purchases).some(qty => qty > 0);
+    if (!captured && hasCart && !nation.purchases_locked) throw new Error('Confirm the cart before collecting income');
+
+    let collected = 0;
+    let logMessage;
+    if (captured) {
+        logMessage = `${name} skips income collection (Capital Captured).`;
+    } else {
+        const extras = [];
+        collected = nation.income;
+        if (isAnniversary(game.game_version)) {
+            const { bonus, details } = getObjectivesBonus(name, nation.active_objectives);
+            if (bonus > 0) {
+                collected += bonus;
+                extras.push(`+${bonus} IPC from National Objectives: ${details.join(', ')}`);
+            }
+            if (nation.tech.includes('War Bonds')) {
+                const roll = Math.floor(Math.random() * 6) + 1;
+                collected += roll;
+                extras.push(`+${roll} IPC from War Bonds (rolled ${roll})`);
+            }
+        }
+        logMessage = `${name} collects income (${collected} IPC). Units mobilized and funds secured.`;
+        if (extras.length) logMessage += ` (Base income ${nation.income}; ${extras.join('; ')})`;
+    }
+
+    // Conditional update: a duplicate request for the same turn changes nothing.
+    const nextTurn = getNextTurn(game.game_version, name);
+    const turnUpdate = await db.runAsync(
+        'UPDATE games SET current_turn = ?, china_reinforcements_placed = 0 WHERE id = ? AND current_turn = ?',
+        [nextTurn, gameId, name]
+    );
+    if (turnUpdate.changes === 0) throw new Error('Turn already advanced');
+
+    await updateNation(gameId, name, {
+        bank: Math.min(nation.bank + collected, MAX_IPC),
+        last_collected: collected,
+        last_purchases: nation.purchases,
+        purchases: {}
+    });
+    await addLog(gameId, logMessage);
+    await resetTurnState(gameId);
+    return nextTurn;
+};
+
+const advanceTurn = async (gameId) => {
+    const game = await getGameRow(gameId);
+    const nextTurn = getNextTurn(game.game_version, game.current_turn);
+    await db.runAsync('UPDATE games SET current_turn = ?, china_reinforcements_placed = 0 WHERE id = ?', [nextTurn, gameId]);
+    // Nothing was collected for the skipped nation, so there is nothing to undo for it.
+    await updateNation(gameId, game.current_turn, { last_collected: null });
+    await addLog(gameId, `The Banker skipped ${game.current_turn}'s turn.`);
+    await resetTurnState(gameId);
+    return nextTurn;
+};
+
+const undoTurn = async (gameId) => {
+    const game = await getGameRow(gameId);
+    const prevTurn = getNextTurn(game.game_version, game.current_turn, -1);
+    const nation = await getNation(gameId, prevTurn);
+    if (nation.last_collected === null || nation.last_collected === undefined) throw new Error('Nothing to undo');
+
+    const reverted = nation.last_collected;
+    const restored = nation.last_purchases || {};
+
+    await db.runAsync('UPDATE games SET current_turn = ?, china_reinforcements_placed = 0 WHERE id = ?', [prevTurn, gameId]);
+    await updateNation(gameId, prevTurn, {
+        bank: Math.max(0, nation.bank - reverted),
+        purchases: restored,
+        // The restored cart is unlocked again, so its confirmed repairs are reverted too.
+        factories: shiftRepairDamage(nation.factories, restored, +1),
+        last_purchases: null,
+        last_collected: null,
+        purchases_locked: 0
+    });
+    await deleteLatestLog(gameId, `${prevTurn} collects income%`, `${prevTurn} skips income%`);
+    await addLog(gameId, `The Banker has undone the turn. Reverted +${reverted} IPC and restored mobilization cart for ${prevTurn}.`);
+    return prevTurn;
+};
+
+const conquerTerritory = async (gameId, conqueror, victim, value, targetType = 'income', liberatedFor = null) => {
+    const val = toBoundedInt(parseInt(value, 10), 1, 100);
+    if (val === null) throw new Error('Invalid value');
+    if (!conqueror || !victim || conqueror === victim) throw new Error('Invalid nations');
+
+    const victimRow = await getNation(gameId, victim);
+    const conquerorRow = await getNation(gameId, conqueror);
+    const victimIncome = Math.max(0, victimRow.income - val);
+
+    if (targetType === 'capital') {
+        const plunder = victimRow.bank;
+        await updateNation(gameId, victim, { income: victimIncome, bank: 0, capital_captured: 1 });
+        await updateNation(gameId, conqueror, { income: conquerorRow.income + val, bank: Math.min(conquerorRow.bank + plunder, MAX_IPC) });
+        await addLog(gameId, `🏆 ${conqueror} conquered the CAPITAL of ${victim} worth ${val} Income, plundering ${plunder} IPCs from their bank!`);
+        return true;
+    }
+
+    await updateNation(gameId, victim, { income: victimIncome });
+
+    if (liberatedFor && liberatedFor !== conqueror) {
+        const owner = await getNation(gameId, liberatedFor);
+        if (!owner.capital_captured) {
+            await updateNation(gameId, liberatedFor, { income: owner.income + val });
+            await addLog(gameId, `🕊️ ${conqueror} liberated territory from ${victim} for ${liberatedFor} (+${val} Income for ${liberatedFor}).`);
+            return true;
+        }
+        // Rules: while the original owner's capital is enemy-held, the liberator keeps the territory and its income.
+        await updateNation(gameId, conqueror, { income: conquerorRow.income + val });
+        await addLog(gameId, `${conqueror} took territory from ${victim} worth ${val} Income (held by ${conqueror} while ${liberatedFor}'s capital is captured).`);
+        return true;
+    }
+
+    await updateNation(gameId, conqueror, { income: conquerorRow.income + val });
+    await addLog(gameId, `${conqueror} conquered territory from ${victim} worth ${val} Income.`);
+    return true;
+};
+
+const toggleCapitalStatus = async (gameId, name, isCaptured) => {
+    await getNation(gameId, name);
+    await updateNation(gameId, name, { capital_captured: isCaptured ? 1 : 0 });
+    await addLog(gameId, `The capital of ${name} has been marked as ${isCaptured ? 'CAPTURED' : 'LIBERATED'}.`);
+    return true;
 };
 
 module.exports = {
     getNations,
-    updateNationStatus,
-    collectIncome,
-    advanceTurn,
-    conquerTerritory,
-    undoTurn,
+    setPlayerName,
+    adminSetEconomy,
+    adjustPurchase,
+    adjustRepair,
     lockPurchases,
     unlockPurchases,
+    collectIncome,
+    advanceTurn,
+    undoTurn,
+    conquerTerritory,
     toggleCapitalStatus
 };
